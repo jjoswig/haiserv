@@ -1,6 +1,6 @@
 """Constants for the iServ integration."""
 
-DOMAIN = "iserv"
+DOMAIN = "haiserv"
 
 # Update interval in minutes
 DEFAULT_UPDATE_INTERVAL = 60

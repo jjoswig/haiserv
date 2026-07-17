@@ -13,8 +13,8 @@ import re
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from custom_components.iserv.const import DAY_ORDER
-from custom_components.iserv.parser import (
+from custom_components.haiserv.const import DAY_ORDER
+from custom_components.haiserv.parser import (
     Lesson,
     format_markdown_table,
     parse_timetable,

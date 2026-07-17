@@ -17,8 +17,8 @@ from typing import Optional
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from custom_components.iserv.const import DAY_ORDER, MAX_CONSECUTIVE_FAILURES
-from custom_components.iserv.parser import Lesson
+from custom_components.haiserv.const import DAY_ORDER, MAX_CONSECUTIVE_FAILURES
+from custom_components.haiserv.parser import Lesson
 
 
 # --- Helper: Coordinator state machine model ---

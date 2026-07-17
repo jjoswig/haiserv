@@ -5,7 +5,7 @@ import pytest_asyncio
 import aiohttp
 from aioresponses import aioresponses
 
-from custom_components.iserv.api import (
+from custom_components.haiserv.api import (
     AuthenticationError,
     CannotConnect,
     IServClient,

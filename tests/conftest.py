@@ -1,6 +1,6 @@
 """Shared test configuration and fixtures for iServ integration tests.
 
-Mocks the homeassistant package to allow importing custom_components.iserv
+Mocks the homeassistant package to allow importing custom_components.haiserv
 modules without requiring a full Home Assistant installation.
 """
 
@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # Mock the homeassistant package and its submodules so that
-# custom_components.iserv can be imported without Home Assistant installed.
+# custom_components.haiserv can be imported without Home Assistant installed.
 HOMEASSISTANT_MODULES = [
     "homeassistant",
     "homeassistant.config_entries",
@@ -87,7 +87,7 @@ def sample_lessons():
 
     Returns 5 lessons spanning Monday through Friday with realistic data.
     """
-    from custom_components.iserv.parser import Lesson
+    from custom_components.haiserv.parser import Lesson
 
     return [
         Lesson(
@@ -161,7 +161,7 @@ def mock_coordinator(sample_lessons):
     - consecutive_failures: 0
     - last_update_success: True
     """
-    from custom_components.iserv.const import MAX_CONSECUTIVE_FAILURES
+    from custom_components.haiserv.const import MAX_CONSECUTIVE_FAILURES
 
     coordinator = MagicMock()
     coordinator.data = sample_lessons

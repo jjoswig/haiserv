@@ -56,11 +56,11 @@ _aiohttp_client_mod = sys.modules["homeassistant.helpers.aiohttp_client"]
 _aiohttp_client_mod.async_get_clientsession = MagicMock(return_value=MagicMock())
 
 # Remove cached config_flow module to force re-import with our stubs
-if "custom_components.iserv.config_flow" in sys.modules:
-    del sys.modules["custom_components.iserv.config_flow"]
+if "custom_components.haiserv.config_flow" in sys.modules:
+    del sys.modules["custom_components.haiserv.config_flow"]
 
-from custom_components.iserv.config_flow import IServConfigFlow  # noqa: E402
-from custom_components.iserv.api import AuthenticationError, CannotConnect  # noqa: E402
+from custom_components.haiserv.config_flow import IServConfigFlow  # noqa: E402
+from custom_components.haiserv.api import AuthenticationError, CannotConnect  # noqa: E402
 
 
 # --- Fixtures ---
@@ -94,9 +94,9 @@ class TestSuccessfulFlow:
     async def test_successful_flow_creates_entry(self, flow, valid_input):
         """Valid credentials should result in a create_entry response."""
         with patch(
-            "custom_components.iserv.config_flow.async_get_clientsession"
+            "custom_components.haiserv.config_flow.async_get_clientsession"
         ) as mock_session_fn, patch(
-            "custom_components.iserv.config_flow.IServClient"
+            "custom_components.haiserv.config_flow.IServClient"
         ) as MockClient:
             mock_session_fn.return_value = MagicMock()
             mock_client_instance = MagicMock()
@@ -121,9 +121,9 @@ class TestSuccessfulFlow:
         }
 
         with patch(
-            "custom_components.iserv.config_flow.async_get_clientsession"
+            "custom_components.haiserv.config_flow.async_get_clientsession"
         ) as mock_session_fn, patch(
-            "custom_components.iserv.config_flow.IServClient"
+            "custom_components.haiserv.config_flow.IServClient"
         ) as MockClient:
             mock_session_fn.return_value = MagicMock()
             mock_client_instance = MagicMock()
@@ -156,9 +156,9 @@ class TestInvalidCredentials:
     async def test_invalid_credentials_shows_auth_error(self, flow, valid_input):
         """AuthenticationError should produce 'invalid_auth' error."""
         with patch(
-            "custom_components.iserv.config_flow.async_get_clientsession"
+            "custom_components.haiserv.config_flow.async_get_clientsession"
         ) as mock_session_fn, patch(
-            "custom_components.iserv.config_flow.IServClient"
+            "custom_components.haiserv.config_flow.IServClient"
         ) as MockClient:
             mock_session_fn.return_value = MagicMock()
             mock_client_instance = MagicMock()
@@ -176,9 +176,9 @@ class TestInvalidCredentials:
     async def test_auth_error_allows_reentry(self, flow, valid_input):
         """After auth error, the form is shown again for re-entry."""
         with patch(
-            "custom_components.iserv.config_flow.async_get_clientsession"
+            "custom_components.haiserv.config_flow.async_get_clientsession"
         ) as mock_session_fn, patch(
-            "custom_components.iserv.config_flow.IServClient"
+            "custom_components.haiserv.config_flow.IServClient"
         ) as MockClient:
             mock_session_fn.return_value = MagicMock()
             mock_client_instance = MagicMock()
@@ -203,9 +203,9 @@ class TestConnectionError:
     async def test_cannot_connect_shows_connection_error(self, flow, valid_input):
         """CannotConnect should produce 'cannot_connect' error."""
         with patch(
-            "custom_components.iserv.config_flow.async_get_clientsession"
+            "custom_components.haiserv.config_flow.async_get_clientsession"
         ) as mock_session_fn, patch(
-            "custom_components.iserv.config_flow.IServClient"
+            "custom_components.haiserv.config_flow.IServClient"
         ) as MockClient:
             mock_session_fn.return_value = MagicMock()
             mock_client_instance = MagicMock()
@@ -223,9 +223,9 @@ class TestConnectionError:
     async def test_unexpected_exception_shows_connection_error(self, flow, valid_input):
         """Any unexpected exception should produce 'cannot_connect' error."""
         with patch(
-            "custom_components.iserv.config_flow.async_get_clientsession"
+            "custom_components.haiserv.config_flow.async_get_clientsession"
         ) as mock_session_fn, patch(
-            "custom_components.iserv.config_flow.IServClient"
+            "custom_components.haiserv.config_flow.IServClient"
         ) as MockClient:
             mock_session_fn.return_value = MagicMock()
             mock_client_instance = MagicMock()
@@ -243,9 +243,9 @@ class TestConnectionError:
     async def test_connection_error_allows_reentry(self, flow, valid_input):
         """After connection error, the form is shown again for re-entry."""
         with patch(
-            "custom_components.iserv.config_flow.async_get_clientsession"
+            "custom_components.haiserv.config_flow.async_get_clientsession"
         ) as mock_session_fn, patch(
-            "custom_components.iserv.config_flow.IServClient"
+            "custom_components.haiserv.config_flow.IServClient"
         ) as MockClient:
             mock_session_fn.return_value = MagicMock()
             mock_client_instance = MagicMock()

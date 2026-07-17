@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 from hypothesis import given, settings, assume
 from hypothesis import strategies as st
 
-from custom_components.iserv.api import validate_url
+from custom_components.haiserv.api import validate_url
 
 
 def _expected_validation_result(url: str) -> bool:

@@ -1,6 +1,6 @@
 {
-  "domain": "iserv",
-  "name": "iServ",
+  "domain": "haiserv",
+  "name": "HAiServ",
   "version": "1.0.0",
   "documentation": "https://github.com/jjoswig/haiserv",
   "codeowners": ["@jjoswig"],

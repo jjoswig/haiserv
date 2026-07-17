@@ -18,8 +18,8 @@ from datetime import datetime
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from custom_components.iserv.const import DAY_ORDER
-from custom_components.iserv.parser import Lesson, get_next_lesson
+from custom_components.haiserv.const import DAY_ORDER
+from custom_components.haiserv.parser import Lesson, get_next_lesson
 
 # --- Strategies ---
 

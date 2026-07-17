@@ -53,14 +53,14 @@ _ha_core_mod.HomeAssistant = MagicMock
 
 # Force reimport the coordinator module so it picks up our fake classes
 # (it may have been cached from earlier imports with generic MagicMock)
-if "custom_components.iserv.coordinator" in sys.modules:
-    del sys.modules["custom_components.iserv.coordinator"]
+if "custom_components.haiserv.coordinator" in sys.modules:
+    del sys.modules["custom_components.haiserv.coordinator"]
 
 # Now import the coordinator module — it will find mocked HA modules
-from custom_components.iserv.coordinator import IServCoordinator  # noqa: E402
-from custom_components.iserv.api import AuthenticationError, CannotConnect  # noqa: E402
-from custom_components.iserv.const import DEFAULT_UPDATE_INTERVAL  # noqa: E402
-from custom_components.iserv.parser import Lesson  # noqa: E402
+from custom_components.haiserv.coordinator import IServCoordinator  # noqa: E402
+from custom_components.haiserv.api import AuthenticationError, CannotConnect  # noqa: E402
+from custom_components.haiserv.const import DEFAULT_UPDATE_INTERVAL  # noqa: E402
+from custom_components.haiserv.parser import Lesson  # noqa: E402
 
 
 # --- Fixtures ---

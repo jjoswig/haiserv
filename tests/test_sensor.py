@@ -112,13 +112,13 @@ def _setup_ha_mocks():
 _setup_ha_mocks()
 
 # Ensure fresh import of sensor module with our mocks
-if "custom_components.iserv.sensor" in sys.modules:
-    del sys.modules["custom_components.iserv.sensor"]
+if "custom_components.haiserv.sensor" in sys.modules:
+    del sys.modules["custom_components.haiserv.sensor"]
 
 # Now import sensor module
-from custom_components.iserv.sensor import IServTimetableSensor  # noqa: E402
-from custom_components.iserv.parser import Lesson, format_markdown_table  # noqa: E402
-from custom_components.iserv.const import MAX_CONSECUTIVE_FAILURES  # noqa: E402
+from custom_components.haiserv.sensor import IServTimetableSensor  # noqa: E402
+from custom_components.haiserv.parser import Lesson, format_markdown_table  # noqa: E402
+from custom_components.haiserv.const import MAX_CONSECUTIVE_FAILURES  # noqa: E402
 
 
 # --- Fixtures ---
@@ -171,7 +171,7 @@ class TestSensorState:
 
         sensor = IServTimetableSensor(mock_coordinator, mock_entry)
 
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_now
             state = sensor.native_value
 
@@ -184,7 +184,7 @@ class TestSensorState:
 
         sensor = IServTimetableSensor(mock_coordinator, mock_entry)
 
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_now
             state = sensor.native_value
 
@@ -197,7 +197,7 @@ class TestSensorState:
 
         sensor = IServTimetableSensor(mock_coordinator, mock_entry)
 
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_now
             state = sensor.native_value
 
@@ -210,7 +210,7 @@ class TestSensorState:
 
         sensor = IServTimetableSensor(mock_coordinator, mock_entry)
 
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_now
             state = sensor.native_value
 
@@ -253,7 +253,7 @@ class TestSensorState:
 
         frozen_now = datetime(2024, 1, 15, 7, 30)  # Monday
 
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_now
             state = sensor.native_value
 
@@ -268,7 +268,7 @@ class TestSensorAttributes:
 
     def test_attributes_contain_lessons_list(self, sensor, sample_lessons):
         """Attributes include 'lessons' as a list of dicts."""
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2024, 1, 15, 8, 0)
             attrs = sensor.extra_state_attributes
 
@@ -282,7 +282,7 @@ class TestSensorAttributes:
 
     def test_attributes_contain_timetable_table(self, sensor, sample_lessons):
         """Attributes include 'timetable_table' as a markdown string."""
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2024, 1, 15, 8, 0)
             attrs = sensor.extra_state_attributes
 
@@ -294,7 +294,7 @@ class TestSensorAttributes:
         """Attributes include 'last_updated' as ISO 8601 timestamp."""
         frozen_now = datetime(2024, 1, 15, 10, 30, 0)
 
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_now
             attrs = sensor.extra_state_attributes
 
@@ -309,7 +309,7 @@ class TestSensorAttributes:
 
         sensor = IServTimetableSensor(coordinator, mock_entry)
 
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2024, 1, 15, 8, 0)
             attrs = sensor.extra_state_attributes
 
@@ -324,7 +324,7 @@ class TestSensorAttributes:
 
         sensor = IServTimetableSensor(coordinator, mock_entry)
 
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = datetime(2024, 1, 15, 8, 0)
             attrs = sensor.extra_state_attributes
 
@@ -401,7 +401,7 @@ class TestDataRetention:
 
         # State should still reflect existing data
         frozen_now = datetime(2024, 1, 15, 7, 30)  # Monday
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_now
             state = sensor.native_value
             attrs = sensor.extra_state_attributes
@@ -424,7 +424,7 @@ class TestDataRetention:
 
         # Data is still reflected
         frozen_now = datetime(2024, 1, 15, 7, 30)  # Monday
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_now
             state = sensor.native_value
             attrs = sensor.extra_state_attributes
@@ -442,7 +442,7 @@ class TestDataRetention:
         sensor = IServTimetableSensor(coordinator, mock_entry)
 
         frozen_now = datetime(2024, 1, 15, 10, 0)
-        with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+        with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
             mock_dt.now.return_value = frozen_now
             attrs = sensor.extra_state_attributes
 

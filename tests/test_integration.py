@@ -53,17 +53,17 @@ if not hasattr(_ha, "data_entry_flow"):
 
 
 # Now import integration modules (safe after mocks)
-from custom_components.iserv.api import (  # noqa: E402
+from custom_components.haiserv.api import (  # noqa: E402
     AuthenticationError,
     CannotConnect,
     IServClient,
     validate_url,
 )
-from custom_components.iserv.const import (  # noqa: E402
+from custom_components.haiserv.const import (  # noqa: E402
     DOMAIN,
     MAX_CONSECUTIVE_FAILURES,
 )
-from custom_components.iserv.parser import (  # noqa: E402
+from custom_components.haiserv.parser import (  # noqa: E402
     Lesson,
     format_markdown_table,
     get_next_lesson,
@@ -119,7 +119,7 @@ def _create_coordinator(mock_client):
     Ensures coordinator.data is initialized to None regardless of which
     test-file stub provides the DataUpdateCoordinator base class.
     """
-    from custom_components.iserv.coordinator import IServCoordinator
+    from custom_components.haiserv.coordinator import IServCoordinator
 
     mock_hass = MagicMock()
     coordinator = IServCoordinator(mock_hass, mock_client)
@@ -130,7 +130,7 @@ def _create_coordinator(mock_client):
 
 def _create_sensor(coordinator, entry_id="test_entry", data=None):
     """Create a sensor entity from a coordinator."""
-    from custom_components.iserv.sensor import IServTimetableSensor
+    from custom_components.haiserv.sensor import IServTimetableSensor
 
     if data is None:
         data = {
@@ -144,14 +144,14 @@ def _create_sensor(coordinator, entry_id="test_entry", data=None):
 
 def _get_sensor_state(sensor, frozen_now: datetime) -> str:
     """Get sensor native_value with a frozen datetime."""
-    with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+    with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
         mock_dt.now.return_value = frozen_now
         return sensor.native_value
 
 
 def _get_sensor_attrs(sensor, frozen_now: datetime) -> dict:
     """Get sensor extra_state_attributes with a frozen datetime."""
-    with patch("custom_components.iserv.sensor.datetime") as mock_dt:
+    with patch("custom_components.haiserv.sensor.datetime") as mock_dt:
         mock_dt.now.return_value = frozen_now
         return sensor.extra_state_attributes
 
