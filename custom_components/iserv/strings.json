@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to iServ",
+        "description": "Enter your iServ server credentials",
+        "data": {
+          "url": "Server URL",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Authentication failed. Please check your credentials.",
+      "cannot_connect": "Cannot connect to the iServ server. Please check the URL.",
+      "invalid_url": "Invalid URL. Must start with https://",
+      "missing_fields": "All fields are required."
+    },
+    "abort": {
+      "already_configured": "This iServ account is already configured."
+    }
+  }
+}

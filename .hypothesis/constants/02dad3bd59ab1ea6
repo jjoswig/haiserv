@@ -1,0 +1,4 @@
+# file: /Users/jjoswig/Desktop/Webdevelopment/haiserv/custom_components/iserv/api.py
+# hypothesis_version: 6.141.1
+
+[401, 403, '.', '/', '/iserv/auth/login', '/iserv/plan/show/raw', '_password', '_username', 'https://', 'localhost', 'week']
