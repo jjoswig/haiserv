@@ -30,6 +30,7 @@ class _FakeConfigFlow:
 
     def __init__(self):
         self.hass = MagicMock()
+        self._unique_id = None
 
     def __init_subclass__(cls, domain=None, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -41,6 +42,14 @@ class _FakeConfigFlow:
 
     def async_show_form(self, **kwargs):
         return {"type": "form", **kwargs}
+
+    async def async_set_unique_id(self, unique_id):
+        """Set the unique_id for the flow."""
+        self._unique_id = unique_id
+
+    def _abort_if_unique_id_configured(self):
+        """Abort if unique_id is already configured (no-op in stub)."""
+        pass
 
 
 # Inject our stub as the ConfigFlow class before config_flow.py is imported
@@ -106,7 +115,7 @@ class TestSuccessfulFlow:
             result = await flow.async_step_user(valid_input)
 
         assert result["type"] == "create_entry"
-        assert result["title"] == "iServ (student)"
+        assert result["title"] == "iServ (student @ https://school.iserv.de)"
         assert result["data"]["url"] == "https://school.iserv.de"
         assert result["data"]["username"] == "student"
         assert result["data"]["password"] == "secret123"
@@ -353,3 +362,118 @@ class TestInvalidUrlFormat:
 
         assert result["type"] == "form"
         assert result["errors"] == {"base": "invalid_url"}
+
+
+# --- Test: Duplicate entry detection via unique_id ---
+
+
+class AbortFlow(Exception):
+    """Simulates Home Assistant's data_entry_flow.AbortFlow exception."""
+
+    def __init__(self, reason):
+        self.reason = reason
+        super().__init__(reason)
+
+
+class TestDuplicateDetection:
+    """Tests verifying duplicate entry detection via unique_id.
+
+    Validates: Requirements 4.3
+    """
+
+    @pytest.mark.asyncio
+    async def test_duplicate_entry_aborts_flow(self, flow, valid_input):
+        """When unique_id is already configured, the flow should abort."""
+
+        def abort_if_configured():
+            raise AbortFlow("already_configured")
+
+        flow._abort_if_unique_id_configured = abort_if_configured
+
+        with patch(
+            "custom_components.haiserv.config_flow.async_get_clientsession"
+        ) as mock_session_fn, patch(
+            "custom_components.haiserv.config_flow.IServClient"
+        ) as MockClient:
+            mock_session_fn.return_value = MagicMock()
+            mock_client_instance = MagicMock()
+            mock_client_instance.authenticate = AsyncMock()
+            MockClient.return_value = mock_client_instance
+
+            with pytest.raises(AbortFlow) as exc_info:
+                await flow.async_step_user(valid_input)
+
+            assert exc_info.value.reason == "already_configured"
+            # Authentication should NOT be called — abort happens before it
+            mock_client_instance.authenticate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_duplicate_detection_uses_correct_unique_id(self, flow, valid_input):
+        """The unique_id should be set to '{username}_{url}' before abort check."""
+
+        def abort_if_configured():
+            raise AbortFlow("already_configured")
+
+        flow._abort_if_unique_id_configured = abort_if_configured
+
+        with patch(
+            "custom_components.haiserv.config_flow.async_get_clientsession"
+        ) as mock_session_fn, patch(
+            "custom_components.haiserv.config_flow.IServClient"
+        ) as MockClient:
+            mock_session_fn.return_value = MagicMock()
+            mock_client_instance = MagicMock()
+            mock_client_instance.authenticate = AsyncMock()
+            MockClient.return_value = mock_client_instance
+
+            with pytest.raises(AbortFlow):
+                await flow.async_step_user(valid_input)
+
+            # Verify unique_id was set correctly before the abort
+            assert flow._unique_id == "student_https://school.iserv.de"
+
+
+# --- Test: Integration test for full happy-path flow ---
+
+
+class TestIntegrationHappyPath:
+    """Integration test: full flow from form display to entry creation.
+
+    Validates: Requirements 4.1, 4.2
+    """
+
+    @pytest.mark.asyncio
+    async def test_full_flow_creates_entry_with_new_title_format(self, flow):
+        """Complete flow: show form -> submit credentials -> verify entry."""
+        # Step 1: Initial form display
+        result = await flow.async_step_user(None)
+        assert result["type"] == "form"
+        assert result["step_id"] == "user"
+
+        # Step 2: Submit valid credentials (with extra whitespace to test trimming)
+        user_input = {
+            "url": "  https://gymnasium.iserv.de  ",
+            "username": "  teacher  ",
+            "password": "securePass!",
+        }
+
+        with patch(
+            "custom_components.haiserv.config_flow.async_get_clientsession"
+        ) as mock_session_fn, patch(
+            "custom_components.haiserv.config_flow.IServClient"
+        ) as MockClient:
+            mock_session_fn.return_value = MagicMock()
+            mock_client_instance = MagicMock()
+            mock_client_instance.authenticate = AsyncMock()
+            MockClient.return_value = mock_client_instance
+
+            result = await flow.async_step_user(user_input)
+
+        # Verify entry creation with new title format
+        assert result["type"] == "create_entry"
+        assert result["title"] == "iServ (teacher @ https://gymnasium.iserv.de)"
+
+        # Verify data contains trimmed values
+        assert result["data"]["url"] == "https://gymnasium.iserv.de"
+        assert result["data"]["username"] == "teacher"
+        assert result["data"]["password"] == "securePass!"

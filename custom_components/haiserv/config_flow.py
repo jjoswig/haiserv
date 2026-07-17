@@ -49,6 +49,10 @@ class IServConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             elif not validate_url(url):
                 errors["base"] = "invalid_url"
             else:
+                # Set unique_id for duplicate detection
+                await self.async_set_unique_id(f"{username}_{url}")
+                self._abort_if_unique_id_configured()
+
                 # Attempt login with IServClient
                 try:
                     session = async_get_clientsession(self.hass)
@@ -64,7 +68,7 @@ class IServConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     # Authentication successful — create the config entry
                     return self.async_create_entry(
-                        title=f"iServ ({username})",
+                        title=f"iServ ({username} @ {url})",
                         data={
                             "url": url,
                             "username": username,

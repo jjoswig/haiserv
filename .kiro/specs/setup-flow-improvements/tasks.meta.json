@@ -1,0 +1,179 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add welcome description and update field labels": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315656927
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315666201
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315815565
+      }
+    ],
+    "2.1 Update entry title format": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315656983
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315820184
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784316718941
+      }
+    ],
+    "2.2 Add unique_id-based duplicate detection": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315657016
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315820916
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784316719597
+      }
+    ],
+    "3. Checkpoint - Verify strings.json and config_flow.py changes": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315657088
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784316730862
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784316735462
+      }
+    ],
+    "4.1 Update existing config flow tests for new title format": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315657123
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784316740662
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784317108459
+      }
+    ],
+    "4.2 Add test for duplicate entry detection": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315657169
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784316741119
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784317109335
+      }
+    ],
+    "4.3 Add test for strings.json structure validation": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315657199
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784316742437
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784317110153
+      }
+    ],
+    "4.4 Add integration test for full happy-path with new title": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315657228
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784317114442
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784317260266
+      }
+    ],
+    "5. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315657258
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784317264927
+      },
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784317381984
+      }
+    ],
+    "1. Update strings.json with new UI text": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784315815611
+      }
+    ],
+    "2. Update config_flow.py with new title format and duplicate detection": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784316719630
+      }
+    ],
+    "4. Update and add tests for the new behavior": [
+      {
+        "executionId": "473c7c87-88f4-460d-86a9-45b6c1059424",
+        "chatSessionId": "sess_eeaef6ee-5c44-4410-a1ed-073136a45934",
+        "timestamp": 1784317260424
+      }
+    ]
+  }
+}
