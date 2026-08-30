@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.update_coordinator import UpdateFailed
+from typing import TYPE_CHECKING
 
-from .api import IServClient
-from .const import DOMAIN
-from .coordinator import IServCoordinator
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
 
 PLATFORMS = ["sensor"]
 
@@ -27,6 +24,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     Returns:
         True if setup was successful.
     """
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    from .api import IServClient
+    from .const import DOMAIN
+    from .coordinator import IServCoordinator
+
     # Get credentials from config entry data
     url = entry.data["url"]
     username = entry.data["username"]
@@ -72,6 +76,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     Returns:
         True if unloading was successful.
     """
+    from .const import DOMAIN
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:

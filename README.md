@@ -22,6 +22,42 @@ HAiServ is a custom [Home Assistant](https://www.home-assistant.io/) integration
 - An IServ account with access to timetable data
 - The HTTPS base URL of the IServ server, for example `https://school.iserv.de`
 
+## Local CLI debugger
+
+The repository also includes a standalone debugger at `cli.py`. It uses the
+same API client and parser as the Home Assistant integration, but does not
+require Home Assistant to be running.
+
+From the repository root:
+
+```bash
+python cli.py --url https://school.iserv.de --username student
+```
+
+The password is requested through a hidden prompt. For non-interactive use,
+set `ISERV_PASSWORD` instead:
+
+```bash
+ISERV_PASSWORD='your-password' python cli.py \
+  --url https://school.iserv.de \
+  --username student \
+  --both
+```
+
+Useful options:
+
+- `--week current|next` — fetch one week (default: `current`)
+- `--both` — print the current and following week
+- `--raw` — print the unparsed server response for debugging
+- `--password` — pass the password directly; this may be visible in shell
+  history or process listings and is therefore not recommended
+
+The normal output is a Markdown timetable with lesson count and ISO week
+number. Exit code `0` indicates success; `2` means invalid arguments, `3`
+means authentication failure, and `4` means a connection or network failure.
+Only use this tool on a trusted machine and never paste passwords or raw
+responses containing private school data into public issue reports.
+
 ## Installation
 
 ### Manual installation
