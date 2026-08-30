@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
+import asyncio
+import inspect
+from urllib.parse import urlparse, urlunparse
 
 import aiohttp
-import asyncio
 
 from .const import CONNECTION_TIMEOUT, REQUEST_TIMEOUT
 
@@ -74,7 +75,7 @@ class IServClient:
             password: The iServ password.
         """
         self._session = session
-        self._base_url = base_url.rstrip("/")
+        self._base_url = _normalize_base_url(base_url)
         self._username = username
         self._password = password
         self._authenticated = False
@@ -114,9 +115,15 @@ class IServClient:
                         f"Authentication failed with status {response.status}"
                     )
 
-                # iServ typically redirects on success (302 -> 200)
-                # A successful login results in a 200 after redirect
+                # iServ typically redirects on success (302 -> 200). Some
+                # installations return HTTP 200 with the login form again
+                # when credentials are rejected, so status alone is not enough.
                 response.raise_for_status()
+                response_body = await _read_response_text(response)
+                if _is_login_page(response_body):
+                    self._authenticated = False
+                    raise AuthenticationError("iServ returned the login page")
+
                 self._authenticated = True
                 return True
 
@@ -194,7 +201,12 @@ class IServClient:
                     )
 
                 response.raise_for_status()
-                return await response.text()
+                response_body = await _read_response_text(response)
+                if _is_login_page(response_body):
+                    self._authenticated = False
+                    raise AuthenticationError("iServ returned the login page")
+
+                return response_body
 
         except AuthenticationError:
             raise
@@ -210,3 +222,32 @@ class IServClient:
             raise CannotConnect(
                 f"Request error for {url}: {err}"
             ) from err
+
+
+def _normalize_base_url(base_url: str) -> str:
+    """Normalize an iServ base URL, including URLs ending in ``/iserv``."""
+    parsed = urlparse(base_url.rstrip("/"))
+    path = parsed.path.rstrip("/")
+    if path == "/iserv":
+        path = ""
+    return urlunparse(parsed._replace(path=path, params="", query="", fragment="")).rstrip("/")
+
+
+async def _read_response_text(response: aiohttp.ClientResponse) -> str:
+    """Read response text, tolerating lightweight test doubles."""
+    response_text = response.text()
+    if inspect.isawaitable(response_text):
+        response_text = await response_text
+    return response_text if isinstance(response_text, str) else ""
+
+
+def _is_login_page(response_body: str) -> bool:
+    """Return whether a response body is the iServ login form."""
+    body = response_body.casefold()
+    markers = (
+        'name="_username"',
+        'name="_password"',
+        'id="loginbutton"',
+        "login-form",
+    )
+    return sum(marker in body for marker in markers) >= 2
