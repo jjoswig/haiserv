@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to iServ",
+        "description": "Welcome to HAiServ! This is a Home Assistant custom integration that supports retrieval of timetables and files for students and classes using iServ.\n\nAn iServ account is necessary to use this integration. If you do not have one, please contact your class teacher.",
+        "data": {
+          "url": "URL",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Authentication failed. Please check your credentials.",
+      "cannot_connect": "Cannot connect to the iServ server. Please check the URL.",
+      "invalid_url": "Invalid URL. Must start with https://",
+      "missing_fields": "All fields are required."
+    },
+    "abort": {
+      "already_configured": "This iServ account is already configured."
+    },
+    "create_entry": {
+      "default": "Successfully connected to {url}. Your credentials have been validated."
+    }
+  }
+}
