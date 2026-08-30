@@ -1,4 +1,0 @@
-# file: /Users/jjoswig/Desktop/Webdevelopment/haiserv/custom_components/iserv/parser.py
-# hypothesis_version: 6.141.1
-
-['%A', '%H:%M', ':', 'day', 'end_time', 'room', 'start_time', 'subject']
