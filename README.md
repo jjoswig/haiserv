@@ -1,6 +1,6 @@
 # HAiServ
 
-HAiServ is a custom [Home Assistant](https://www.home-assistant.io/) integration for retrieving timetable data from an [IServ](https://iserv.de/) server. It authenticates with an existing IServ account, fetches the current week's timetable, and exposes the next lesson and the full timetable as a sensor.
+HAiServ is a custom [Home Assistant](https://www.home-assistant.io/) integration for retrieving timetable data from an [IServ](https://iserv.de/) server. It authenticates with an existing IServ account, fetches the current and following week's timetables, and exposes the next lesson and full timetable data as sensors.
 
 > [!IMPORTANT]
 > HAiServ is an early-stage, unofficial project and is not affiliated with or endorsed by IServ GmbH. IServ installations can differ, so compatibility with every server is not guaranteed.
@@ -48,7 +48,10 @@ HAiServ validates the connection before creating the Home Assistant config entry
 
 ## Entity
 
-The integration creates one sensor named **iServ Timetable**.
+The integration creates two sensors:
+
+- **iServ Timetable** — the current calendar week's timetable and next lesson
+- **iServ Next Week Timetable** — the following Monday-to-Friday timetable
 
 ### State
 
@@ -80,6 +83,17 @@ content: "{{ state_attr('sensor.iserv_timetable', 'timetable_table') }}"
 ```
 
 The actual entity ID may differ if Home Assistant has assigned another name.
+
+The next-week sensor has the same `lessons` and `timetable_table` attributes,
+so it can be rendered with a separate Markdown card:
+
+```yaml
+type: markdown
+content: "{{ state_attr('sensor.iserv_next_week_timetable', 'timetable_table') }}"
+```
+
+Its state is the number of lessons in the following week, or `No lessons` if
+the server returned an empty timetable.
 
 ## Updating
 

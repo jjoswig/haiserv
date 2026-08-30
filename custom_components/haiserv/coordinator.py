@@ -18,12 +18,18 @@ _LOGGER = logging.getLogger(__name__)
 class IServCoordinator(DataUpdateCoordinator[list[Lesson]]):
     """Coordinator to manage iServ timetable data fetching."""
 
-    def __init__(self, hass: HomeAssistant, client: IServClient) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: IServClient,
+        week_offset: int = 0,
+    ) -> None:
         """Initialize the coordinator.
 
         Args:
             hass: The Home Assistant instance.
             client: An authenticated IServClient instance.
+            week_offset: Number of weeks relative to the current week to fetch.
         """
         super().__init__(
             hass,
@@ -32,28 +38,31 @@ class IServCoordinator(DataUpdateCoordinator[list[Lesson]]):
             update_interval=timedelta(minutes=DEFAULT_UPDATE_INTERVAL),
         )
         self.client = client
+        self.week_offset = week_offset
         self.consecutive_failures: int = 0
 
     async def _async_update_data(self) -> list[Lesson]:
         """Fetch and parse timetable. Handle auth expiry and retries.
 
         Returns:
-            Sorted list of Lesson objects for the current week.
+            Sorted list of Lesson objects for the configured week.
 
         Raises:
             UpdateFailed: If the fetch fails due to network errors or
                 repeated authentication failures.
         """
-        # Get the current calendar week number
-        current_week = datetime.now().isocalendar()[1]
+        # Use local date arithmetic so the week changes at local midnight and
+        # year boundaries are handled correctly.
+        target_date = datetime.now() + timedelta(weeks=self.week_offset)
+        target_week = target_date.isocalendar()[1]
 
         try:
-            raw_data = await self.client.fetch_timetable(week=current_week)
+            raw_data = await self.client.fetch_timetable(week=target_week)
         except AuthenticationError:
             # Session expired — try re-authenticating once and retry
             try:
                 await self.client.authenticate()
-                raw_data = await self.client.fetch_timetable(week=current_week)
+                raw_data = await self.client.fetch_timetable(week=target_week)
             except (AuthenticationError, CannotConnect) as err:
                 self.consecutive_failures += 1
                 _LOGGER.error(

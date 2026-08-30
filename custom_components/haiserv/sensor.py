@@ -30,7 +30,15 @@ async def async_setup_entry(
         async_add_entities: Callback to add entities to Home Assistant.
     """
     coordinator: IServCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([IServTimetableSensor(coordinator, entry)])
+    entities: list[SensorEntity] = [IServTimetableSensor(coordinator, entry)]
+
+    next_week_coordinator = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_next_week"
+    )
+    if next_week_coordinator is not None:
+        entities.append(IServNextWeekTimetableSensor(next_week_coordinator, entry))
+
+    async_add_entities(entities)
 
 
 class IServTimetableSensor(CoordinatorEntity[IServCoordinator], SensorEntity):
@@ -104,3 +112,24 @@ class IServTimetableSensor(CoordinatorEntity[IServCoordinator], SensorEntity):
         ):
             return False
         return True
+
+
+class IServNextWeekTimetableSensor(IServTimetableSensor):
+    """Sensor exposing the complete timetable for the following week."""
+
+    _attr_name = "iServ Next Week Timetable"
+
+    def __init__(
+        self, coordinator: IServCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the next-week timetable sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_next_week_timetable"
+
+    @property
+    def native_value(self) -> str:
+        """Return the number of lessons in the following week's timetable."""
+        lessons = self.coordinator.data
+        if not lessons:
+            return "No lessons"
+        return f"{len(lessons)} lessons"
