@@ -56,7 +56,10 @@ def validate_url(url: str) -> bool:
 class IServClient:
     """Async HTTP client for iServ communication."""
 
-    LOGIN_PATH = "/iserv/auth/login"
+    # Current iServ installations use login_check; older versions use the
+    # auth/login endpoint. The fallback keeps both generations compatible.
+    LOGIN_PATH = "/iserv/login_check"
+    LEGACY_LOGIN_PATH = "/iserv/auth/login"
     TIMETABLE_PATH = "/iserv/plan/show/raw"
 
     def __init__(
@@ -102,6 +105,20 @@ class IServClient:
         }
 
         try:
+            return await self._authenticate_at(url, payload)
+        except CannotConnect:
+            # A missing login_check endpoint is reported as a connection error
+            # by some HTTP clients/test doubles. Retry the legacy endpoint, but
+            # do not mask an explicit authentication failure.
+            return await self._authenticate_at(
+                f"{self._base_url}{self.LEGACY_LOGIN_PATH}", payload
+            )
+
+    async def _authenticate_at(
+        self, url: str, payload: dict[str, str]
+    ) -> bool:
+        """Authenticate against one iServ login endpoint."""
+        try:
             timeout = aiohttp.ClientTimeout(total=CONNECTION_TIMEOUT)
             async with self._session.post(
                 url,
@@ -114,10 +131,10 @@ class IServClient:
                     raise AuthenticationError(
                         f"Authentication failed with status {response.status}"
                     )
+                if _is_auth_redirect(response):
+                    self._authenticated = False
+                    raise AuthenticationError("iServ redirected to authentication")
 
-                # iServ typically redirects on success (302 -> 200). Some
-                # installations return HTTP 200 with the login form again
-                # when credentials are rejected, so status alone is not enough.
                 response.raise_for_status()
                 response_body = await _read_response_text(response)
                 if _is_login_page(response_body):
@@ -199,6 +216,9 @@ class IServClient:
                     raise AuthenticationError(
                         "Session expired or authentication required"
                     )
+                if _is_auth_redirect(response):
+                    self._authenticated = False
+                    raise AuthenticationError("iServ redirected to authentication")
 
                 response.raise_for_status()
                 response_body = await _read_response_text(response)
@@ -239,6 +259,12 @@ async def _read_response_text(response: aiohttp.ClientResponse) -> str:
     if inspect.isawaitable(response_text):
         response_text = await response_text
     return response_text if isinstance(response_text, str) else ""
+
+
+def _is_auth_redirect(response: aiohttp.ClientResponse) -> bool:
+    """Return whether a response redirects to an iServ auth endpoint."""
+    urls = [response.url, *(item.url for item in response.history)]
+    return any("/iserv/auth/auth" in str(url) for url in urls)
 
 
 def _is_login_page(response_body: str) -> bool:
