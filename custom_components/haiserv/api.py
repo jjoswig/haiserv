@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import re
 from collections.abc import Callable
-from urllib.parse import urlparse, urlunparse
+from html import unescape
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import aiohttp
 
@@ -57,10 +59,8 @@ def validate_url(url: str) -> bool:
 class IServClient:
     """Async HTTP client for iServ communication."""
 
-    # Current iServ installations use login_check; older versions use the
-    # auth/login endpoint. The fallback keeps both generations compatible.
-    LOGIN_PATH = "/iserv/login_check"
-    LEGACY_LOGIN_PATH = "/iserv/auth/login"
+    APP_LOGIN_PATH = "/iserv/app/login"
+    LOGIN_PATH = "/iserv/auth/login"
     TIMETABLE_PATH = "/iserv/plan/show/raw"
 
     def __init__(
@@ -101,21 +101,56 @@ class IServClient:
             AuthenticationError: If iServ rejects credentials (HTTP 401/403).
             CannotConnect: If the connection times out or is refused.
         """
-        url = f"{self._base_url}{self.LOGIN_PATH}"
         payload = {
             "_username": self._username,
             "_password": self._password,
         }
 
         try:
-            return await self._authenticate_at(url, payload)
-        except CannotConnect:
-            # A missing login_check endpoint is reported as a connection error
-            # by some HTTP clients/test doubles. Retry the legacy endpoint, but
-            # do not mask an explicit authentication failure.
-            return await self._authenticate_at(
-                f"{self._base_url}{self.LEGACY_LOGIN_PATH}", payload
-            )
+            login_url = await self._discover_login_url()
+        except (AuthenticationError, CannotConnect):
+            # Older installations and lightweight test doubles accept
+            # credentials directly at auth/login.
+            login_url = f"{self._base_url}{self.LOGIN_PATH}"
+
+        return await self._authenticate_at(login_url, payload)
+
+    async def _discover_login_url(self) -> str:
+        """Discover the login URL containing the app-specific target path."""
+        url = f"{self._base_url}{self.APP_LOGIN_PATH}"
+        for _ in range(3):
+            response_url, response_body = await self._get_page(url)
+            if _is_login_page(response_body):
+                return response_url
+            refresh_url = _meta_refresh_url(response_body, response_url)
+            if refresh_url is None:
+                raise AuthenticationError(
+                    "iServ did not provide an application login form"
+                )
+            url = refresh_url
+
+        raise AuthenticationError("Too many iServ authentication redirects")
+
+    async def _get_page(self, url: str) -> tuple[str, str]:
+        """Fetch one authentication page and return its final URL and body."""
+        try:
+            timeout = aiohttp.ClientTimeout(total=CONNECTION_TIMEOUT)
+            async with self._session.get(
+                url,
+                timeout=timeout,
+                allow_redirects=True,
+            ) as response:
+                self._debug_response("GET", response)
+                await _raise_for_status(response)
+                return str(response.url), await _read_response_text(response)
+        except asyncio.TimeoutError as err:
+            raise CannotConnect(
+                f"Connection to {self._base_url} timed out"
+            ) from err
+        except aiohttp.ClientError as err:
+            raise CannotConnect(
+                f"Connection error with {self._base_url}: {err}"
+            ) from err
 
     async def _authenticate_at(
         self, url: str, payload: dict[str, str]
@@ -135,15 +170,25 @@ class IServClient:
                     raise AuthenticationError(
                         f"Authentication failed with status {response.status}"
                     )
-                if _is_auth_redirect(response):
-                    self._authenticated = False
-                    raise AuthenticationError("iServ redirected to authentication")
-
-                response.raise_for_status()
+                await _raise_for_status(response)
+                response_url = str(response.url)
                 response_body = await _read_response_text(response)
                 if _is_login_page(response_body):
                     self._authenticated = False
                     raise AuthenticationError("iServ returned the login page")
+
+                for _ in range(3):
+                    refresh_url = _meta_refresh_url(response_body, response_url)
+                    if refresh_url is None:
+                        break
+                    response_url, response_body = await self._get_page(refresh_url)
+                    if _is_login_page(response_body):
+                        self._authenticated = False
+                        raise AuthenticationError("iServ returned the login page")
+
+                if "/iserv/auth/auth" in response_url:
+                    self._authenticated = False
+                    raise AuthenticationError("iServ authentication did not complete")
 
                 self._authenticated = True
                 return True
@@ -225,7 +270,7 @@ class IServClient:
                     self._authenticated = False
                     raise AuthenticationError("iServ redirected to authentication")
 
-                response.raise_for_status()
+                await _raise_for_status(response)
                 response_body = await _read_response_text(response)
                 if _is_login_page(response_body):
                     self._authenticated = False
@@ -274,12 +319,31 @@ def _normalize_base_url(base_url: str) -> str:
     return urlunparse(parsed._replace(path=path, params="", query="", fragment="")).rstrip("/")
 
 
+async def _raise_for_status(response: aiohttp.ClientResponse) -> None:
+    """Raise for HTTP errors, tolerating asynchronous test doubles."""
+    result = response.raise_for_status()
+    if inspect.isawaitable(result):
+        await result
+
+
 async def _read_response_text(response: aiohttp.ClientResponse) -> str:
     """Read response text, tolerating lightweight test doubles."""
     response_text = response.text()
     if inspect.isawaitable(response_text):
         response_text = await response_text
     return response_text if isinstance(response_text, str) else ""
+
+
+def _meta_refresh_url(response_body: str, base_url: str) -> str | None:
+    """Extract and resolve an HTML meta-refresh URL."""
+    match = re.search(
+        r'<meta[^>]+http-equiv=["\']refresh["\'][^>]+content=["\'][^;]+;\s*url=([^"\']+)["\']',
+        response_body,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    return urljoin(base_url, unescape(match.group(1)).strip(" '\""))
 
 
 def _safe_url(url: object) -> str:
