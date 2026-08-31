@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from collections.abc import Callable
 from urllib.parse import urlparse, urlunparse
 
 import aiohttp
@@ -68,6 +69,7 @@ class IServClient:
         base_url: str,
         username: str,
         password: str,
+        debug_callback: Callable[[str], None] | None = None,
     ) -> None:
         """Initialize the iServ client.
 
@@ -81,6 +83,7 @@ class IServClient:
         self._base_url = _normalize_base_url(base_url)
         self._username = username
         self._password = password
+        self._debug_callback = debug_callback
         self._authenticated = False
 
     @property
@@ -126,6 +129,7 @@ class IServClient:
                 timeout=timeout,
                 allow_redirects=True,
             ) as response:
+                self._debug_response("POST", response)
                 if response.status in (401, 403):
                     self._authenticated = False
                     raise AuthenticationError(
@@ -211,6 +215,7 @@ class IServClient:
                 params=params,
                 timeout=timeout,
             ) as response:
+                self._debug_response("GET", response)
                 if response.status in (401, 403):
                     self._authenticated = False
                     raise AuthenticationError(
@@ -244,6 +249,22 @@ class IServClient:
             ) from err
 
 
+    def _debug_response(self, method: str, response: aiohttp.ClientResponse) -> None:
+        """Report safe request diagnostics without credentials or query values."""
+        if self._debug_callback is None:
+            return
+
+        history = ", ".join(
+            f"{item.status} {_safe_url(item.url)}" for item in response.history
+        ) or "none"
+        cookies = sorted(cookie.key for cookie in self._session.cookie_jar)
+        self._debug_callback(
+            f"{method} {response.status} {_safe_url(response.url)}; "
+            f"redirects={history}; content_type={response.headers.get('Content-Type', 'unknown')}; "
+            f"cookies={cookies or 'none'}"
+        )
+
+
 def _normalize_base_url(base_url: str) -> str:
     """Normalize an iServ base URL, including URLs ending in ``/iserv``."""
     parsed = urlparse(base_url.rstrip("/"))
@@ -259,6 +280,12 @@ async def _read_response_text(response: aiohttp.ClientResponse) -> str:
     if inspect.isawaitable(response_text):
         response_text = await response_text
     return response_text if isinstance(response_text, str) else ""
+
+
+def _safe_url(url: object) -> str:
+    """Return a URL without query parameters or fragments."""
+    parsed = urlparse(str(url))
+    return urlunparse(parsed._replace(query="", fragment=""))
 
 
 def _is_auth_redirect(response: aiohttp.ClientResponse) -> bool:

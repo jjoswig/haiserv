@@ -49,6 +49,8 @@ Useful options:
 - `--week current|next` — fetch one week (default: `current`)
 - `--both` — print the current and following week
 - `--raw` — print the unparsed server response for debugging
+- `--verbose` — print safe request/response diagnostics to stderr, including
+  status, redirect paths, content types, cookie names, and response sizes
 - `--password` — pass the password directly; this may be visible in shell
   history or process listings and is therefore not recommended
 
@@ -56,7 +58,8 @@ The normal output is a Markdown timetable with lesson count and ISO week
 number. Exit code `0` indicates success; `2` means invalid arguments, `3`
 means authentication failure, and `4` means a connection or network failure.
 Only use this tool on a trusted machine and never paste passwords or raw
-responses containing private school data into public issue reports.
+responses containing private school data into public issue reports. Verbose
+output deliberately omits passwords, query-string values, and response bodies.
 
 ## Installation
 

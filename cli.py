@@ -61,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the raw server response instead of the parsed table",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print safe request, redirect, cookie, and response diagnostics",
+    )
     return parser
 
 
@@ -104,6 +109,11 @@ def _print_week(
     print(format_markdown_table(lessons) or "No lessons")
 
 
+def _debug(message: str) -> None:
+    """Print a verbose diagnostic message to stderr."""
+    print(f"[debug] {message}", file=sys.stderr)
+
+
 async def async_main(args: argparse.Namespace) -> int:
     """Run the CLI workflow and return a process exit code."""
     from custom_components.haiserv.api import (
@@ -123,7 +133,13 @@ async def async_main(args: argparse.Namespace) -> int:
     import aiohttp
 
     async with aiohttp.ClientSession() as session:
-        client = IServClient(session, args.url, args.username, password)
+        client = IServClient(
+            session,
+            args.url,
+            args.username,
+            password,
+            debug_callback=_debug if args.verbose else None,
+        )
         try:
             await client.authenticate()
             offsets = (0, 1) if args.both else (0 if args.week == "current" else 1,)
@@ -133,7 +149,9 @@ async def async_main(args: argparse.Namespace) -> int:
                     print()
                 label = "Current" if week_offset == 0 else "Next"
                 _print_week(label, week_number, raw_data, lessons, args.raw)
-        except AuthenticationError:
+        except AuthenticationError as err:
+            if args.verbose:
+                _debug(f"authentication failed: {err}")
             print("Error: authentication failed; check URL, username, and password.", file=sys.stderr)
             return 3
         except CannotConnect as err:
