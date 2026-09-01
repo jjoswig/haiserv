@@ -67,6 +67,7 @@ class IServClient:
 
     APP_LOGIN_PATH = "/iserv/app/login"
     LOGIN_PATH = "/iserv/auth/login"
+    CURRENT_TIMETABLE_PATH = "/iserv/dieschulapp/api/1.0/current-timetable/"
     TIMETABLE_PATH = "/iserv/plan/show/raw"
     TIMETABLE_DATA_PATH = "/iserv/timetable/data"
 
@@ -93,6 +94,8 @@ class IServClient:
         self._debug_callback = debug_callback
         self._authenticated = False
         self._timetable_path: str | None = None
+        self._course_ids: tuple[str, ...] = ()
+        self._course_filter_required = False
 
     @property
     def is_authenticated(self) -> bool:
@@ -244,11 +247,25 @@ class IServClient:
 
     async def _fetch_timetable_once(self, week: int | None) -> str:
         """Fetch from the detected timetable API generation."""
+        if self._timetable_path == self.CURRENT_TIMETABLE_PATH:
+            try:
+                return await self._fetch_current_timetable(week)
+            except _EndpointUnavailable:
+                self._timetable_path = None
+
         if self._timetable_path == self.TIMETABLE_DATA_PATH:
             try:
                 return await self._fetch_timetable_data(week)
             except _EndpointUnavailable:
                 self._timetable_path = None
+
+        if self._timetable_path is None:
+            try:
+                body = await self._fetch_current_timetable(week)
+                self._timetable_path = self.CURRENT_TIMETABLE_PATH
+                return body
+            except _EndpointUnavailable:
+                pass
 
         legacy_params = {"week": str(week)} if week is not None else {}
         try:
@@ -263,6 +280,49 @@ class IServClient:
             body = await self._fetch_timetable_data(week)
             self._timetable_path = self.TIMETABLE_DATA_PATH
             return body
+
+    async def _fetch_current_timetable(self, week: int | None) -> str:
+        """Fetch DieSchulApp timetable data and convert it to legacy lessons."""
+        monday, _ = _week_dates(week)
+        params = {
+            "date": monday.isoformat(),
+            "week": "true",
+            "substitutions": "true",
+        }
+        if self._course_filter_required and self._course_ids:
+            params["filterBy"] = _course_filter(self._course_ids)
+        body = await self._do_fetch_timetable(
+            f"{self._base_url}{self.CURRENT_TIMETABLE_PATH}",
+            params,
+            unavailable_statuses=(403, 404),
+        )
+        normalized, course_ids, has_entries, recognized = (
+            _normalize_current_timetable(body)
+        )
+        if not recognized:
+            raise _EndpointUnavailable
+        if course_ids:
+            self._course_ids = course_ids
+
+        # Some installations expose the pupil and main course without a
+        # filter, but only populate entries when the course is requested.
+        if not has_entries and self._course_ids and "filterBy" not in params:
+            self._course_filter_required = True
+            filtered_params = dict(params)
+            filtered_params["filterBy"] = _course_filter(self._course_ids)
+            filtered_body = await self._do_fetch_timetable(
+                f"{self._base_url}{self.CURRENT_TIMETABLE_PATH}",
+                filtered_params,
+                unavailable_statuses=(403, 404),
+            )
+            normalized, filtered_ids, _, recognized = _normalize_current_timetable(
+                filtered_body
+            )
+            if not recognized:
+                raise _EndpointUnavailable
+            if filtered_ids:
+                self._course_ids = filtered_ids
+        return normalized
 
     async def _fetch_timetable_data(self, week: int | None) -> str:
         """Fetch and normalize the current iServ timetable JSON response."""
@@ -437,6 +497,126 @@ def _normalize_timetable_data(response_body: str) -> str:
                 }
             )
     return json.dumps(lessons)
+
+
+def _normalize_current_timetable(
+    response_body: str,
+) -> tuple[str, tuple[str, ...], bool, bool]:
+    """Convert a DieSchulApp response to legacy lessons and main course IDs."""
+    try:
+        payload = json.loads(response_body)
+    except (json.JSONDecodeError, TypeError):
+        return response_body, (), False, False
+    if not isinstance(payload, dict):
+        return response_body, (), False, False
+
+    students = payload.get("students")
+    if not isinstance(students, list):
+        return response_body, (), False, False
+
+    course_ids: list[str] = []
+    payload_entries = payload.get("entries")
+    entries: list[dict[str, object]] = (
+        [entry for entry in payload_entries if isinstance(entry, dict)]
+        if isinstance(payload_entries, list)
+        else []
+    )
+    for student in students:
+        if not isinstance(student, dict):
+            continue
+        main_course = student.get("mainCourse")
+        if isinstance(main_course, dict):
+            course_id = main_course.get("id")
+            if isinstance(course_id, int) or (
+                isinstance(course_id, str) and course_id.isdecimal()
+            ):
+                course_ids.append(str(course_id))
+        student_entries = student.get("entries")
+        if isinstance(student_entries, list):
+            entries.extend(
+                entry for entry in student_entries if isinstance(entry, dict)
+            )
+
+    lessons = []
+    for entry in entries:
+        if _is_canceled_substitution(entry):
+            continue
+        slot = entry.get("timeTableSlot")
+        if not isinstance(slot, dict):
+            continue
+        start = _first_string(slot, "start", "startTime", "start_time")
+        end = _first_string(slot, "end", "endTime", "end_time")
+        weekday = entry.get("weekday")
+        if (
+            not start
+            or not end
+            or not isinstance(weekday, int)
+            or not 0 <= weekday <= 4
+        ):
+            continue
+
+        lessons.append(
+            {
+                "day": (date(2024, 1, 1) + timedelta(days=weekday)).strftime("%A"),
+                "start_time": _clock_time(start),
+                "end_time": _clock_time(end),
+                "subject": _course_subject(entry.get("courseSubject")),
+                "room": _display_value(entry.get("room")),
+            }
+        )
+
+    return (
+        json.dumps(lessons),
+        tuple(dict.fromkeys(course_ids)),
+        bool(entries),
+        True,
+    )
+
+
+def _course_filter(course_ids: tuple[str, ...]) -> str:
+    """Build the DieSchulApp course filter from discovered numeric IDs."""
+    safe_ids = (course_id for course_id in course_ids if course_id.isdecimal())
+    return "courseSubject.course:in(" + ",".join(safe_ids) + ")"
+
+
+def _is_canceled_substitution(entry: dict[str, object]) -> bool:
+    """Return whether a substitution explicitly cancels a lesson."""
+    if not entry.get("substitution"):
+        return False
+    substitution_type = entry.get("substitutionType")
+    values = [substitution_type]
+    if isinstance(substitution_type, dict):
+        values = list(substitution_type.values())
+    return any(
+        isinstance(value, str)
+        and value.casefold() in {"canceled", "cancelled", "entfall", "ausfall"}
+        for value in values
+    )
+
+
+def _course_subject(value: object) -> str:
+    """Return the most useful display name from a course-subject object."""
+    if not isinstance(value, dict):
+        return _display_value(value)
+    return _display_value(value.get("subject")) or _display_value(value.get("acronym"))
+
+
+def _display_value(value: object) -> str:
+    """Extract a readable name or acronym from a timetable value."""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("name", "displayName", "acronym", "shortName", "label"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return ""
+
+
+def _clock_time(value: str) -> str:
+    """Extract HH:MM from an API time or ISO date-time string."""
+    match = re.search(r"(?:T|^)(\d{2}:\d{2})(?::\d{2})?", value)
+    return match.group(1) if match else value[:5]
 
 
 def _period_times(payload: dict[str, object]) -> dict[str, tuple[str, str]]:

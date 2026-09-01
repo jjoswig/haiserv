@@ -88,13 +88,15 @@ class TestIServClient:
 
     @pytest.fixture
     def client(self, session):
-        """Create an IServClient instance for testing."""
-        return IServClient(
+        """Create a client pinned to the legacy endpoint under test."""
+        client = IServClient(
             session=session,
             base_url=self.BASE_URL,
             username="testuser",
             password="testpass",
         )
+        client._timetable_path = client.TIMETABLE_PATH
+        return client
 
     def test_init(self):
         """Client initializes with correct attributes."""
