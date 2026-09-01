@@ -21,13 +21,14 @@ class Lesson:
     end_time: str  # "HH:MM" format
     subject: str  # Subject name or empty string
     room: str  # Room identifier or empty string
+    canceled: bool = False  # Whether the lesson was canceled
 
 
 def parse_timetable(raw_data: str, locale: str) -> list[Lesson]:
     """Parse raw iServ timetable response into structured lesson objects.
 
     Expects a JSON string containing a list of lesson objects with fields:
-    day, start_time, end_time, subject, room.
+    day, start_time, end_time, subject, room, canceled.
 
     Entries missing day or start_time or end_time are skipped.
     Missing subject/room default to empty string.
@@ -96,6 +97,7 @@ def parse_timetable(raw_data: str, locale: str) -> list[Lesson]:
                 end_time=end_time.strip(),
                 subject=subject.strip(),
                 room=room.strip(),
+                canceled=entry.get("canceled") is True,
             )
         )
 
@@ -127,7 +129,7 @@ def sort_lessons(lessons: list[Lesson]) -> list[Lesson]:
 def format_markdown_table(lessons: list[Lesson]) -> str:
     """Format lessons as a Markdown pipe-and-dash table string.
 
-    Produces a table with columns: Day, Time, Subject, Room.
+    Produces a table with columns: Day, Time, Subject, Room, Canceled.
     Time is formatted as "HH:MM - HH:MM".
     Returns empty string for an empty list.
 
@@ -143,15 +145,16 @@ def format_markdown_table(lessons: list[Lesson]) -> str:
     lines: list[str] = []
 
     # Header row
-    lines.append("| Day | Time | Subject | Room |")
+    lines.append("| Day | Time | Subject | Room | Canceled |")
     # Separator row
-    lines.append("| --- | --- | --- | --- |")
+    lines.append("| --- | --- | --- | --- | --- |")
 
     # Data rows
     for lesson in lessons:
         time_str = f"{lesson.start_time} - {lesson.end_time}"
         lines.append(
-            f"| {lesson.day} | {time_str} | {lesson.subject} | {lesson.room} |"
+            f"| {lesson.day} | {time_str} | {lesson.subject} | {lesson.room} | "
+            f"{str(lesson.canceled).lower()} |"
         )
 
     return "\n".join(lines)

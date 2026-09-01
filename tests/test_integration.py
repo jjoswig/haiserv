@@ -239,16 +239,16 @@ class TestEndToEndConfigToSensor:
         assert len(attrs["lessons"]) == 6
         assert attrs["lessons"][0] == {
             "day": "Monday", "start_time": "08:00", "end_time": "08:45",
-            "subject": "Mathematics", "room": "A101",
+            "subject": "Mathematics", "room": "A101", "canceled": False,
         }
 
         # Verify timetable_table markdown
         assert "timetable_table" in attrs
         table = attrs["timetable_table"]
-        assert "| Day | Time | Subject | Room |" in table
-        assert "| --- | --- | --- | --- |" in table
-        assert "| Monday | 08:00 - 08:45 | Mathematics | A101 |" in table
-        assert "| Friday | 14:00 - 14:45 | Art | E505 |" in table
+        assert "| Day | Time | Subject | Room | Canceled |" in table
+        assert "| --- | --- | --- | --- | --- |" in table
+        assert "| Monday | 08:00 - 08:45 | Mathematics | A101 | false |" in table
+        assert "| Friday | 14:00 - 14:45 | Art | E505 | false |" in table
 
         # Verify last_updated ISO timestamp
         assert "last_updated" in attrs
@@ -550,7 +550,7 @@ class TestEndToEndSensorUpdates:
         """Full pipeline: raw JSON → parse → sort → sensor attributes.
 
         Verifies data structure: sorted lessons, empty string defaults,
-        HH:MM format, all 5 fields present, correct markdown table.
+        HH:MM format, all fields present, correct markdown table.
         """
         mock_client = MagicMock()
         mock_client.authenticate = AsyncMock(return_value=True)
@@ -583,20 +583,21 @@ class TestEndToEndSensorUpdates:
         frozen_now = datetime(2024, 1, 15, 7, 30)  # Monday
         attrs = _get_sensor_attrs(sensor, frozen_now)
 
-        # Each lesson dict has all 5 required fields
+        # Each lesson dict has all required fields
         for lesson_dict in attrs["lessons"]:
             assert "day" in lesson_dict
             assert "start_time" in lesson_dict
             assert "end_time" in lesson_dict
             assert "subject" in lesson_dict
             assert "room" in lesson_dict
+            assert lesson_dict["canceled"] is False
 
         # Markdown table
         table = attrs["timetable_table"]
-        assert "| Day | Time | Subject | Room |" in table
-        assert "| Monday | 08:00 - 08:45 | Math | A1 |" in table
-        assert "| Monday | 14:00 - 14:45 |  | Z999 |" in table
-        assert "| Wednesday | 10:00 - 10:45 | Music |  |" in table
+        assert "| Day | Time | Subject | Room | Canceled |" in table
+        assert "| Monday | 08:00 - 08:45 | Math | A1 | false |" in table
+        assert "| Monday | 14:00 - 14:45 |  | Z999 | false |" in table
+        assert "| Wednesday | 10:00 - 10:45 | Music |  | false |" in table
 
     @pytest.mark.asyncio
     async def test_no_upcoming_lessons_shows_correct_state(self):

@@ -111,7 +111,7 @@ Mathematics 08:00-08:45
 
 | Attribute | Description |
 | --- | --- |
-| `lessons` | List of lessons containing `day`, `start_time`, `end_time`, `subject`, and `room` |
+| `lessons` | List of lessons containing `day`, `start_time`, `end_time`, `subject`, `room`, and the boolean `canceled` status |
 | `timetable_data` | Complete structured JSON response from the selected timetable API |
 | `timetable_table` | Full timetable formatted as a Markdown table |
 | `last_updated` | ISO 8601 timestamp generated when the attributes are read |

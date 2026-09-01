@@ -50,6 +50,7 @@ lesson_dict_st = st.fixed_dictionaries(
         "end_time": valid_time_st,
         "subject": field_text_st,
         "room": field_text_st,
+        "canceled": st.booleans(),
     }
 )
 
@@ -61,6 +62,7 @@ lesson_st = st.builds(
     end_time=valid_time_st,
     subject=field_text_st,
     room=field_text_st,
+    canceled=st.booleans(),
 )
 
 
@@ -108,6 +110,8 @@ def test_property_2_timetable_parsing_round_trip(lessons: list[dict]) -> None:
         # Room defaults to empty string if empty/whitespace
         expected_room = original["room"].strip() if original["room"].strip() else ""
         assert parsed_lesson.room == expected_room
+
+        assert parsed_lesson.canceled is original["canceled"]
 
 
 @settings(max_examples=100)
@@ -186,10 +190,12 @@ def test_property_3_sort_preserves_all_elements(lessons: list[Lesson]) -> None:
 
     # Same multiset of lessons (sort is stable, content preserved)
     original_tuples = sorted(
-        (l.day, l.start_time, l.end_time, l.subject, l.room) for l in lessons
+        (l.day, l.start_time, l.end_time, l.subject, l.room, l.canceled)
+        for l in lessons
     )
     sorted_tuples = sorted(
-        (l.day, l.start_time, l.end_time, l.subject, l.room) for l in sorted_lessons
+        (l.day, l.start_time, l.end_time, l.subject, l.room, l.canceled)
+        for l in sorted_lessons
     )
     assert original_tuples == sorted_tuples
 
@@ -204,7 +210,7 @@ def test_property_5_markdown_table_structure(lessons: list[Lesson]) -> None:
     """Property 5: Markdown Table Structure.
 
     Generate non-empty lesson lists, assert output contains header row with
-    Day|Time|Subject|Room, separator row, one data row per lesson with
+    Day|Time|Subject|Room|Canceled, separator row, one data row per lesson with
     "HH:MM - HH:MM" time format.
 
     Validates: Requirements 5.1, 5.2
@@ -226,6 +232,7 @@ def test_property_5_markdown_table_structure(lessons: list[Lesson]) -> None:
     assert "Time" in header
     assert "Subject" in header
     assert "Room" in header
+    assert "Canceled" in header
     assert header.startswith("|")
     assert header.endswith("|")
 

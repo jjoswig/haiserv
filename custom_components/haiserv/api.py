@@ -493,8 +493,9 @@ def _normalize_timetable_data(response_body: str) -> str:
         if not isinstance(entry, dict):
             continue
         change = entry.get("change")
-        if isinstance(change, dict) and "0" in change.get("change_types", []):
-            continue
+        canceled = (
+            isinstance(change, dict) and "0" in change.get("change_types", [])
+        )
 
         start_time = _first_string(entry, "start_time", "startTime", "start")
         end_time = _first_string(entry, "end_time", "endTime", "end")
@@ -519,6 +520,7 @@ def _normalize_timetable_data(response_body: str) -> str:
                     "end_time": end_time[:5],
                     "subject": subject,
                     "room": room,
+                    "canceled": canceled,
                 }
             )
     return json.dumps(lessons)
@@ -564,8 +566,6 @@ def _normalize_current_timetable(
 
     lessons = []
     for entry in entries:
-        if _is_canceled_substitution(entry):
-            continue
         slot = entry.get("timeTableSlot")
         if not isinstance(slot, dict):
             continue
@@ -587,6 +587,7 @@ def _normalize_current_timetable(
                 "end_time": _clock_time(end),
                 "subject": _course_subject(entry.get("courseSubject")),
                 "room": _display_value(entry.get("room")),
+                "canceled": _is_canceled_substitution(entry),
             }
         )
 
@@ -606,8 +607,6 @@ def _course_filter(course_ids: tuple[str, ...]) -> str:
 
 def _is_canceled_substitution(entry: dict[str, object]) -> bool:
     """Return whether a substitution explicitly cancels a lesson."""
-    if not entry.get("substitution"):
-        return False
     substitution_type = entry.get("substitutionType")
     values = [substitution_type]
     if isinstance(substitution_type, dict):

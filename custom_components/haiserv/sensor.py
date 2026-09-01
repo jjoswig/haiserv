@@ -87,7 +87,7 @@ class IServTimetableSensor(CoordinatorEntity[IServCoordinator], SensorEntity):
 
         Returns:
             Dict with:
-            - "lessons": list of lesson dicts (day, start_time, end_time, subject, room)
+            - "lessons": list of lesson dicts including the canceled status
             - "timetable_data": complete JSON data returned by the timetable API
             - "timetable_table": Markdown table string
             - "last_updated": ISO 8601 timestamp of last successful update
