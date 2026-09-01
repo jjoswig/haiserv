@@ -28,6 +28,26 @@ class _EndpointUnavailable(Exception):
     """Raised when an iServ generation does not provide an endpoint."""
 
 
+class TimetableResult(str):
+    """Parser-compatible timetable text with the complete server JSON attached."""
+
+    raw_response: str
+    timetable_data: object | None
+
+    def __new__(
+        cls, normalized_response: str, raw_response: str | None = None
+    ) -> TimetableResult:
+        result = super().__new__(cls, normalized_response)
+        result.raw_response = (
+            raw_response if raw_response is not None else normalized_response
+        )
+        try:
+            result.timetable_data = json.loads(result.raw_response)
+        except (json.JSONDecodeError, TypeError):
+            result.timetable_data = None
+        return result
+
+
 def validate_url(url: str) -> bool:
     """Validate that a URL starts with https:// and has a valid host component.
 
@@ -222,7 +242,7 @@ class IServClient:
                 f"Connection error with {self._base_url}: {err}"
             ) from err
 
-    async def fetch_timetable(self, week: int | None = None) -> str:
+    async def fetch_timetable(self, week: int | None = None) -> TimetableResult:
         """Fetch raw timetable data for a given calendar week.
 
         If the session has expired (HTTP 401/403 on fetch), re-authenticates
@@ -245,7 +265,7 @@ class IServClient:
             await self.authenticate()
             return await self._fetch_timetable_once(week)
 
-    async def _fetch_timetable_once(self, week: int | None) -> str:
+    async def _fetch_timetable_once(self, week: int | None) -> TimetableResult:
         """Fetch from the detected timetable API generation."""
         if self._timetable_path == self.CURRENT_TIMETABLE_PATH:
             try:
@@ -275,13 +295,13 @@ class IServClient:
                 unavailable_statuses=(403, 404),
             )
             self._timetable_path = self.TIMETABLE_PATH
-            return body
+            return TimetableResult(body)
         except _EndpointUnavailable:
             body = await self._fetch_timetable_data(week)
             self._timetable_path = self.TIMETABLE_DATA_PATH
             return body
 
-    async def _fetch_current_timetable(self, week: int | None) -> str:
+    async def _fetch_current_timetable(self, week: int | None) -> TimetableResult:
         """Fetch DieSchulApp timetable data and convert it to legacy lessons."""
         monday, _ = _week_dates(week)
         params = {
@@ -322,9 +342,14 @@ class IServClient:
                 raise _EndpointUnavailable
             if filtered_ids:
                 self._course_ids = filtered_ids
-        return normalized
+        source_body = (
+            filtered_body
+            if self._course_filter_required and "filterBy" not in params
+            else body
+        )
+        return TimetableResult(normalized, source_body)
 
-    async def _fetch_timetable_data(self, week: int | None) -> str:
+    async def _fetch_timetable_data(self, week: int | None) -> TimetableResult:
         """Fetch and normalize the current iServ timetable JSON response."""
         start, end = _week_dates(week)
         timetable_filter = {
@@ -340,7 +365,7 @@ class IServClient:
             {"filter": json.dumps(timetable_filter, separators=(",", ":"))},
             unavailable_statuses=(404,),
         )
-        return _normalize_timetable_data(body)
+        return TimetableResult(_normalize_timetable_data(body), body)
 
     async def _do_fetch_timetable(
         self,

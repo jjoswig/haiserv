@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta
 
@@ -40,6 +41,7 @@ class IServCoordinator(DataUpdateCoordinator[list[Lesson]]):
         self.client = client
         self.week_offset = week_offset
         self.consecutive_failures: int = 0
+        self.timetable_data: object | None = None
 
     async def _async_update_data(self) -> list[Lesson]:
         """Fetch and parse timetable. Handle auth expiry and retries.
@@ -85,11 +87,20 @@ class IServCoordinator(DataUpdateCoordinator[list[Lesson]]):
                 f"Cannot connect to iServ: {err}"
             ) from err
 
+        # Preserve the complete JSON alongside the compatibility lesson model.
+        timetable_data = getattr(raw_data, "timetable_data", None)
+        if timetable_data is None:
+            try:
+                timetable_data = json.loads(raw_data)
+            except (json.JSONDecodeError, TypeError):
+                timetable_data = None
+
         # Parse and sort the timetable data
         lessons = parse_timetable(raw_data, locale="en")
         sorted_lessons = sort_lessons(lessons)
 
         # Success — reset consecutive failure counter
         self.consecutive_failures = 0
+        self.timetable_data = timetable_data
 
         return sorted_lessons

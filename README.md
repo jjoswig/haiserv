@@ -48,14 +48,15 @@ Useful options:
 
 - `--week current|next` — fetch one week (default: `current`)
 - `--both` — print the current and following week
-- `--raw` — print the unparsed server response for debugging
+- `--raw` — print only the exact, unparsed server response for debugging
 - `--verbose` — print safe request/response diagnostics to stderr, including
   status, redirect paths, content types, cookie names, and response sizes
 - `--password` — pass the password directly; this may be visible in shell
   history or process listings and is therefore not recommended
 
-The normal output is a Markdown timetable with lesson count and ISO week
-number. Exit code `0` indicates success; `2` means invalid arguments, `3`
+The normal output contains a Markdown timetable and the complete, structured
+JSON response with lesson count and ISO week number. Exit code `0` indicates
+success; `2` means invalid arguments, `3`
 means authentication failure, and `4` means a connection or network failure.
 Only use this tool on a trusted machine and never paste passwords or raw
 responses containing private school data into public issue reports. Verbose
@@ -111,6 +112,7 @@ Mathematics 08:00-08:45
 | Attribute | Description |
 | --- | --- |
 | `lessons` | List of lessons containing `day`, `start_time`, `end_time`, `subject`, and `room` |
+| `timetable_data` | Complete structured JSON response from the selected timetable API |
 | `timetable_table` | Full timetable formatted as a Markdown table |
 | `last_updated` | ISO 8601 timestamp generated when the attributes are read |
 

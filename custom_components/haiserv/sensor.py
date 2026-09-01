@@ -88,6 +88,7 @@ class IServTimetableSensor(CoordinatorEntity[IServCoordinator], SensorEntity):
         Returns:
             Dict with:
             - "lessons": list of lesson dicts (day, start_time, end_time, subject, room)
+            - "timetable_data": complete JSON data returned by the timetable API
             - "timetable_table": Markdown table string
             - "last_updated": ISO 8601 timestamp of last successful update
         """
@@ -95,6 +96,7 @@ class IServTimetableSensor(CoordinatorEntity[IServCoordinator], SensorEntity):
 
         return {
             "lessons": [asdict(lesson) for lesson in lessons],
+            "timetable_data": getattr(self.coordinator, "timetable_data", None),
             "timetable_table": format_markdown_table(lessons),
             "last_updated": datetime.now().isoformat(),
         }

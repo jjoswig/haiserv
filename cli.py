@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import getpass
+import json
 import os
 import sys
 from collections.abc import Sequence
@@ -102,11 +103,17 @@ def _print_week(
 
     print(f"=== {week_label} week (ISO week {week_number}) ===")
     if raw:
-        print(raw_data)
+        print(getattr(raw_data, "raw_response", raw_data))
         return
 
     print(f"Lessons: {len(lessons)}")
     print(format_markdown_table(lessons) or "No lessons")
+    timetable_data = getattr(raw_data, "timetable_data", None)
+    print("\nTimetable JSON:")
+    if timetable_data is None:
+        print(getattr(raw_data, "raw_response", raw_data))
+    else:
+        print(json.dumps(timetable_data, ensure_ascii=False, indent=2))
 
 
 def _debug(message: str) -> None:
