@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import re
 from collections.abc import Callable
+from datetime import date, datetime, timedelta
 from html import unescape
 from urllib.parse import urljoin, urlparse, urlunparse
 
@@ -20,6 +22,10 @@ class AuthenticationError(Exception):
 
 class CannotConnect(Exception):
     """Raised when connection to iServ fails (timeout or refused)."""
+
+
+class _EndpointUnavailable(Exception):
+    """Raised when an iServ generation does not provide an endpoint."""
 
 
 def validate_url(url: str) -> bool:
@@ -62,6 +68,7 @@ class IServClient:
     APP_LOGIN_PATH = "/iserv/app/login"
     LOGIN_PATH = "/iserv/auth/login"
     TIMETABLE_PATH = "/iserv/plan/show/raw"
+    TIMETABLE_DATA_PATH = "/iserv/timetable/data"
 
     def __init__(
         self,
@@ -85,6 +92,7 @@ class IServClient:
         self._password = password
         self._debug_callback = debug_callback
         self._authenticated = False
+        self._timetable_path: str | None = None
 
     @property
     def is_authenticated(self) -> bool:
@@ -227,19 +235,59 @@ class IServClient:
             AuthenticationError: If re-authentication fails after session expiry.
             CannotConnect: If the connection times out or is refused.
         """
-        url = f"{self._base_url}{self.TIMETABLE_PATH}"
-        params: dict[str, str] = {}
-        if week is not None:
-            params["week"] = str(week)
-
         try:
-            return await self._do_fetch_timetable(url, params)
+            return await self._fetch_timetable_once(week)
         except AuthenticationError:
             # Session expired — re-authenticate once and retry
             await self.authenticate()
-            return await self._do_fetch_timetable(url, params)
+            return await self._fetch_timetable_once(week)
 
-    async def _do_fetch_timetable(self, url: str, params: dict[str, str]) -> str:
+    async def _fetch_timetable_once(self, week: int | None) -> str:
+        """Fetch from the detected timetable API generation."""
+        if self._timetable_path == self.TIMETABLE_DATA_PATH:
+            try:
+                return await self._fetch_timetable_data(week)
+            except _EndpointUnavailable:
+                self._timetable_path = None
+
+        legacy_params = {"week": str(week)} if week is not None else {}
+        try:
+            body = await self._do_fetch_timetable(
+                f"{self._base_url}{self.TIMETABLE_PATH}",
+                legacy_params,
+                unavailable_statuses=(403, 404),
+            )
+            self._timetable_path = self.TIMETABLE_PATH
+            return body
+        except _EndpointUnavailable:
+            body = await self._fetch_timetable_data(week)
+            self._timetable_path = self.TIMETABLE_DATA_PATH
+            return body
+
+    async def _fetch_timetable_data(self, week: int | None) -> str:
+        """Fetch and normalize the current iServ timetable JSON response."""
+        start, end = _week_dates(week)
+        timetable_filter = {
+            "startDate": start.strftime("%d.%m.%Y"),
+            "endDate": end.strftime("%d.%m.%Y"),
+            "changesUntil": None,
+            "classes": ["%"],
+            "teachers": ["%"],
+            "rooms": ["%"],
+        }
+        body = await self._do_fetch_timetable(
+            f"{self._base_url}{self.TIMETABLE_DATA_PATH}",
+            {"filter": json.dumps(timetable_filter, separators=(",", ":"))},
+            unavailable_statuses=(404,),
+        )
+        return _normalize_timetable_data(body)
+
+    async def _do_fetch_timetable(
+        self,
+        url: str,
+        params: dict[str, str],
+        unavailable_statuses: tuple[int, ...] = (),
+    ) -> str:
         """Perform the actual timetable fetch request.
 
         Args:
@@ -261,6 +309,8 @@ class IServClient:
                 timeout=timeout,
             ) as response:
                 self._debug_response("GET", response)
+                if response.status in unavailable_statuses:
+                    raise _EndpointUnavailable
                 if response.status in (401, 403):
                     self._authenticated = False
                     raise AuthenticationError(
@@ -278,7 +328,7 @@ class IServClient:
 
                 return response_body
 
-        except AuthenticationError:
+        except (AuthenticationError, _EndpointUnavailable):
             raise
         except asyncio.TimeoutError as err:
             raise CannotConnect(
@@ -317,6 +367,123 @@ def _normalize_base_url(base_url: str) -> str:
     if path == "/iserv":
         path = ""
     return urlunparse(parsed._replace(path=path, params="", query="", fragment="")).rstrip("/")
+
+
+def _week_dates(week: int | None) -> tuple[date, date]:
+    """Return Monday and Friday for the requested ISO week."""
+    today = date.today()
+    if week is None:
+        monday = today - timedelta(days=today.weekday())
+    else:
+        candidates = []
+        for year in range(today.year - 1, today.year + 2):
+            try:
+                candidates.append(date.fromisocalendar(year, week, 1))
+            except ValueError:
+                continue
+        monday = min(candidates, key=lambda candidate: abs(candidate - today))
+    return monday, monday + timedelta(days=4)
+
+
+def _normalize_timetable_data(response_body: str) -> str:
+    """Convert the current timetable envelope to the legacy lesson list."""
+    try:
+        payload = json.loads(response_body)
+    except (json.JSONDecodeError, TypeError):
+        return response_body
+
+    if isinstance(payload, list):
+        return response_body
+    if not isinstance(payload, dict):
+        return response_body
+
+    data = payload.get("data")
+    entries = data.get("timetable") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        return response_body
+
+    period_times = _period_times(payload)
+    lessons = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        change = entry.get("change")
+        if isinstance(change, dict) and "0" in change.get("change_types", []):
+            continue
+
+        start_time = _first_string(entry, "start_time", "startTime", "start")
+        end_time = _first_string(entry, "end_time", "endTime", "end")
+        if (not start_time or not end_time) and entry.get("period") is not None:
+            start_time, end_time = period_times.get(
+                str(entry["period"]), (start_time, end_time)
+            )
+
+        lesson_date = _first_string(entry, "date", "day", "lessonDate")
+        day = _weekday_name(lesson_date) if lesson_date else None
+        subject = _first_string(entry, "subject") or ""
+        room = _first_string(entry, "room") or ""
+        if isinstance(change, dict):
+            subject = _first_string(change, "substitutionSubject") or subject
+            room = _first_string(change, "substitutionRoom") or room
+
+        if day and start_time and end_time:
+            lessons.append(
+                {
+                    "day": day,
+                    "start_time": start_time[:5],
+                    "end_time": end_time[:5],
+                    "subject": subject,
+                    "room": room,
+                }
+            )
+    return json.dumps(lessons)
+
+
+def _period_times(payload: dict[str, object]) -> dict[str, tuple[str, str]]:
+    """Collect period start/end times from known timetable metadata shapes."""
+    result: dict[str, tuple[str, str]] = {}
+    containers = [payload.get("meta"), payload.get("data")]
+    for container in containers:
+        if not isinstance(container, dict):
+            continue
+        for key in ("lessonTimes", "periods", "times"):
+            values = container.get(key)
+            if isinstance(values, dict):
+                values = [
+                    dict(value, period=period)
+                    for period, value in values.items()
+                    if isinstance(value, dict)
+                ]
+            if not isinstance(values, list):
+                continue
+            for value in values:
+                if not isinstance(value, dict):
+                    continue
+                period = value.get("period", value.get("number", value.get("id")))
+                start = _first_string(value, "start_time", "startTime", "start")
+                end = _first_string(value, "end_time", "endTime", "end")
+                if period is not None and start and end:
+                    result[str(period)] = (start, end)
+    return result
+
+
+def _first_string(mapping: dict[str, object], *keys: str) -> str | None:
+    """Return the first non-empty string under the given keys."""
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _weekday_name(value: str) -> str:
+    """Convert an iServ date to the English weekday expected by the parser."""
+    for date_format in ("%d.%m.%Y", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(value[:19], date_format).strftime("%A")
+        except ValueError:
+            continue
+    return value
 
 
 async def _raise_for_status(response: aiohttp.ClientResponse) -> None:
