@@ -13,7 +13,9 @@
 # The dashboard uses only Home Assistant's built-in Markdown card and the
 # integration's `lessons` attribute. No credentials or custom cards are needed.
 # The template emits a native Markdown pipe table; raw HTML tables are not
-# rendered by the built-in card. Multiple lessons in one cell use " / ".
+# rendered by the built-in card. Inline <mark>/<strong> highlights the lesson
+# currently in progress, with a visible marker as fallback. Multiple lessons
+# in one cell use " / ".
 
 title: Stundenplan
 views:
@@ -27,9 +29,14 @@ views:
           - sensor.iserv_timetable
           - sensor.iserv_next_week_timetable
         content: |-
-          {% macro timetable(entity, heading) -%}
+          {% macro timetable(entity, heading, week_offset) -%}
             {% set lessons = state_attr(entity, 'lessons') or [] -%}
             {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] -%}
+            {% set current_day = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][now().weekday()] -%}
+            {% set current_time = now().strftime('%H:%M') -%}
+            {% set week_start = now() - timedelta(days=now().weekday()) + timedelta(days=week_offset) -%}
+            {% set week_end = week_start + timedelta(days=4) -%}
+            {% set date_range = week_start.strftime('%d.%m.') ~ '–' ~ week_end.strftime('%d.%m.%y') -%}
             {% set ns = namespace(slots=[], rows=[
               '| Zeit | Montag | Dienstag | Mittwoch | Donnerstag | Freitag |',
               '| :--- | :--- | :--- | :--- | :--- | :--- |'
@@ -40,7 +47,7 @@ views:
                 {% set ns.slots = ns.slots + [slot] -%}
               {% endif -%}
             {% endfor -%}
-            {{ '## ' ~ heading ~ '\n\n' -}}
+            {{ '## ' ~ heading ~ ' (' ~ date_range ~ ')\n\n' -}}
             {% if lessons | count == 0 -%}
               {{ '_Keine Stundenplandaten verfügbar._' -}}
             {% else -%}
@@ -54,7 +61,15 @@ views:
                     {% set subject = lesson.subject | replace('|', '\\|') -%}
                     {% set room = lesson.room | default('', true) | replace('|', '\\|') -%}
                     {% set text = subject ~ (' · ' ~ room if room else '') -%}
-                    {% set cell.items = cell.items + [('~~' ~ text ~ '~~') if lesson.canceled else ('**' ~ text ~ '**')] -%}
+                    {% set is_current = week_offset == 0 and day == current_day and lesson.start_time <= current_time and current_time < lesson.end_time and not lesson.canceled -%}
+                    {% if is_current -%}
+                      {% set rendered = '<mark><strong>▶ ' ~ text ~ '</strong></mark>' -%}
+                    {% elif lesson.canceled -%}
+                      {% set rendered = '~~' ~ text ~ '~~' -%}
+                    {% else -%}
+                      {% set rendered = '**' ~ text ~ '**' -%}
+                    {% endif -%}
+                    {% set cell.items = cell.items + [rendered] -%}
                   {% endfor -%}
                   {% set row.value = row.value ~ ' ' ~ (cell.items | join(' / ')) ~ ' |' -%}
                 {% endfor -%}
@@ -64,6 +79,6 @@ views:
             {% endif -%}
           {%- endmacro %}
 
-          {{ timetable('sensor.iserv_timetable', 'Aktuelle Woche') }}
+          {{ timetable('sensor.iserv_timetable', 'Aktuelle Woche', 0) }}
 
-          {{ timetable('sensor.iserv_next_week_timetable', 'Nächste Woche') }}
+          {{ timetable('sensor.iserv_next_week_timetable', 'Nächste Woche', 7) }}
