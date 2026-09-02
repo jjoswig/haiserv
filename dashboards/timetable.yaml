@@ -13,15 +13,17 @@
 # The dashboard uses only Home Assistant's built-in Markdown card and the
 # integration's `lessons` attribute. No credentials or custom cards are needed.
 # The template emits a native Markdown pipe table; raw HTML tables are not
-# rendered by the built-in card. Inline <mark>/<strong> highlights the lesson
-# currently in progress, with a visible marker as fallback. Multiple lessons
-# in one cell use " / ".
+# rendered by the built-in card. The card's sanitizer permits <mark> but strips
+# inline style attributes, so <mark> provides the reliable theme-defined light
+# highlight for today's column and the current lesson. Multiple lessons in one
+# cell use " / ".
 
 title: Stundenplan
 views:
   - title: Stundenplan
     path: timetable
     icon: mdi:calendar-week
+    panel: true
     cards:
       - type: markdown
         title: Stundenplan
@@ -32,15 +34,20 @@ views:
           {% macro timetable(entity, heading, week_offset) -%}
             {% set lessons = state_attr(entity, 'lessons') or [] -%}
             {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] -%}
-            {% set current_day = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][now().weekday()] -%}
+            {% set day_headings = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'] -%}
+            {% set current_weekday = now().weekday() -%}
+            {% set current_day = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][current_weekday] -%}
             {% set current_time = now().strftime('%H:%M') -%}
             {% set week_start = now() - timedelta(days=now().weekday()) + timedelta(days=week_offset) -%}
             {% set week_end = week_start + timedelta(days=4) -%}
             {% set date_range = week_start.strftime('%d.%m.') ~ '–' ~ week_end.strftime('%d.%m.%y') -%}
-            {% set ns = namespace(slots=[], rows=[
-              '| Zeit | Montag | Dienstag | Mittwoch | Donnerstag | Freitag |',
-              '| :--- | :--- | :--- | :--- | :--- | :--- |'
-            ]) -%}
+            {% set table = namespace(header='| Zeit |', separator='| :--- |') -%}
+            {% for day_heading in day_headings -%}
+              {% set highlighted_heading = '<mark>' ~ day_heading ~ '</mark>' if current_weekday < 5 and loop.index0 == current_weekday else day_heading -%}
+              {% set table.header = table.header ~ ' ' ~ highlighted_heading ~ ' |' -%}
+              {% set table.separator = table.separator ~ ' :--- |' -%}
+            {% endfor -%}
+            {% set ns = namespace(slots=[], rows=[table.header, table.separator]) -%}
             {% for lesson in lessons -%}
               {% set slot = lesson.start_time ~ '|' ~ lesson.end_time -%}
               {% if slot not in ns.slots -%}
@@ -55,6 +62,7 @@ views:
                 {% set times = slot.split('|') -%}
                 {% set row = namespace(value='| ' ~ times[0] ~ '–' ~ times[1] ~ ' |') -%}
                 {% for day in days -%}
+                  {% set is_today_column = current_weekday < 5 and loop.index0 == current_weekday -%}
                   {% set matches = lessons | selectattr('day', 'eq', day) | selectattr('start_time', 'eq', times[0]) | selectattr('end_time', 'eq', times[1]) | list -%}
                   {% set cell = namespace(items=[]) -%}
                   {% for lesson in matches -%}
@@ -63,15 +71,19 @@ views:
                     {% set text = subject ~ (' · ' ~ room if room else '') -%}
                     {% set is_current = week_offset == 0 and day == current_day and lesson.start_time <= current_time and current_time < lesson.end_time and not lesson.canceled -%}
                     {% if is_current -%}
-                      {% set rendered = '<mark><strong>▶ ' ~ text ~ '</strong></mark>' -%}
+                      {% set rendered = '<strong>▶ ' ~ text ~ '</strong>' -%}
                     {% elif lesson.canceled -%}
-                      {% set rendered = '~~' ~ text ~ '~~' -%}
+                      {% set rendered = ('<del>' ~ text ~ '</del>') if is_today_column else ('~~' ~ text ~ '~~') -%}
                     {% else -%}
-                      {% set rendered = '**' ~ text ~ '**' -%}
+                      {% set rendered = ('<strong>' ~ text ~ '</strong>') if is_today_column else ('**' ~ text ~ '**') -%}
                     {% endif -%}
                     {% set cell.items = cell.items + [rendered] -%}
                   {% endfor -%}
-                  {% set row.value = row.value ~ ' ' ~ (cell.items | join(' / ')) ~ ' |' -%}
+                  {% set cell_content = cell.items | join(' / ') -%}
+                  {% if is_today_column -%}
+                    {% set cell_content = '<mark>' ~ (cell_content if cell_content else '&nbsp;') ~ '</mark>' -%}
+                  {% endif -%}
+                  {% set row.value = row.value ~ ' ' ~ cell_content ~ ' |' -%}
                 {% endfor -%}
                 {% set ns.rows = ns.rows + [row.value] -%}
               {% endfor -%}
