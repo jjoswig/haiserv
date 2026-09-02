@@ -1,0 +1,89 @@
+# HAiServ timetable dashboard for Home Assistant Lovelace.
+#
+# Installation:
+# 1. Set up HAiServ and verify the entity IDs under Settings > Devices & services
+#    > Entities. Home Assistant normally creates sensor.iserv_timetable and
+#    sensor.iserv_next_week_timetable, but may add a suffix.
+# 2. If necessary, replace every occurrence of both entity IDs in this file.
+# 3. In Home Assistant, create/open a dashboard, select Edit dashboard > the
+#    three-dot menu > Raw configuration editor, and paste this whole file.
+#    For a YAML-mode dashboard, copy this file into the Home Assistant config
+#    directory and reference it from the existing lovelace/dashboards config.
+#
+# The dashboard uses only Home Assistant's built-in Markdown card and the
+# integration's `lessons` attribute. No credentials or custom cards are needed.
+
+title: Stundenplan
+views:
+  - title: Stundenplan
+    path: timetable
+    icon: mdi:calendar-week
+    cards:
+      - type: markdown
+        title: Stundenplan
+        entity_id:
+          - sensor.iserv_timetable
+          - sensor.iserv_next_week_timetable
+        content: |-
+          {% macro timetable(entity, heading) %}
+            {% set lessons = state_attr(entity, 'lessons') or [] %}
+            {% set days = [
+              ['Monday', 'Montag'],
+              ['Tuesday', 'Dienstag'],
+              ['Wednesday', 'Mittwoch'],
+              ['Thursday', 'Donnerstag'],
+              ['Friday', 'Freitag']
+            ] %}
+            {% set ns = namespace(slots=[]) %}
+            {% for lesson in lessons %}
+              {% set slot = lesson.start_time ~ '|' ~ lesson.end_time %}
+              {% if slot not in ns.slots %}
+                {% set ns.slots = ns.slots + [slot] %}
+              {% endif %}
+            {% endfor %}
+
+            ## {{ heading }}
+
+            {% if lessons | count == 0 %}
+              _Keine Stundenplandaten verfügbar._
+            {% else %}
+              <table>
+                <thead>
+                  <tr>
+                    <th>Zeit</th>
+                    {% for day in days %}<th>{{ day[1] }}</th>{% endfor %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for slot in ns.slots | sort %}
+                    {% set times = slot.split('|') %}
+                    <tr>
+                      <th>{{ times[0] }}<br>–{{ times[1] }}</th>
+                      {% for day in days %}
+                        {% set matches = lessons
+                          | selectattr('day', 'eq', day[0])
+                          | selectattr('start_time', 'eq', times[0])
+                          | selectattr('end_time', 'eq', times[1])
+                          | list %}
+                        <td>
+                          {% for lesson in matches %}
+                            {% set room = ' · ' ~ lesson.room if lesson.room else '' %}
+                            {% if lesson.canceled %}
+                              <span style="color: var(--disabled-text-color); opacity: 0.55;"><del>{{ lesson.subject | e }}{{ room | e }}</del></span>
+                            {% else %}
+                              <strong>{{ lesson.subject | e }}</strong>{{ room | e }}
+                            {% endif %}
+                            {% if not loop.last %}<br>{% endif %}
+                          {% endfor %}
+                        </td>
+                      {% endfor %}
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+          {% endmacro %}
+
+          {{ timetable('sensor.iserv_timetable', 'Aktuelle Woche') }}
+
+          {{ timetable('sensor.iserv_next_week_timetable', 'Nächste Woche') }}

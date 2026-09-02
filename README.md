@@ -136,6 +136,24 @@ content: "{{ state_attr('sensor.iserv_next_week_timetable', 'timetable_table') }
 Its state is the number of lessons in the following week, or `No lessons` if
 the server returned an empty timetable.
 
+## Timetable dashboard
+
+[`dashboards/timetable.yaml`](dashboards/timetable.yaml) provides a ready-to-use
+Lovelace dashboard for the current and following week. It arranges Monday
+through Friday as columns and lesson times as rows, and renders canceled
+lessons muted and struck through. The dashboard uses the `lessons` attributes
+of both timetable sensors and Home Assistant's built-in Markdown card; it does
+not require a custom card.
+
+Open a Home Assistant dashboard, select **Edit dashboard → three-dot menu → Raw
+configuration editor**, and paste the complete YAML file. Before saving, check
+the timetable entities under **Settings → Devices & services → Entities**. If
+Home Assistant assigned IDs other than `sensor.iserv_timetable` and
+`sensor.iserv_next_week_timetable`, replace every occurrence of those two IDs
+in the file. YAML-mode installations can instead copy the file into their Home
+Assistant configuration directory and reference it from their existing
+Lovelace dashboard configuration.
+
 ## Updating
 
 For a manual installation, replace `<config>/custom_components/haiserv` with the files from the newer release or revision and restart Home Assistant.
