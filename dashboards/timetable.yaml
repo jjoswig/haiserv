@@ -15,8 +15,8 @@
 # The template emits a native Markdown pipe table; raw HTML tables are not
 # rendered by the built-in card. The card's sanitizer permits <mark> but strips
 # inline style attributes, so <mark> provides the reliable theme-defined light
-# highlight for today's column and the current lesson. Multiple lessons in one
-# cell use " / ".
+# highlight for today's column header and the current lesson. Multiple lessons
+# in one cell use " / ".
 
 title: Stundenplan
 views:
@@ -62,7 +62,6 @@ views:
                 {% set times = slot.split('|') -%}
                 {% set row = namespace(value='| ' ~ times[0] ~ '–' ~ times[1] ~ ' |') -%}
                 {% for day in days -%}
-                  {% set is_today_column = current_weekday < 5 and loop.index0 == current_weekday -%}
                   {% set matches = lessons | selectattr('day', 'eq', day) | selectattr('start_time', 'eq', times[0]) | selectattr('end_time', 'eq', times[1]) | list -%}
                   {% set cell = namespace(items=[]) -%}
                   {% for lesson in matches -%}
@@ -71,19 +70,15 @@ views:
                     {% set text = subject ~ (' · ' ~ room if room else '') -%}
                     {% set is_current = week_offset == 0 and day == current_day and lesson.start_time <= current_time and current_time < lesson.end_time and not lesson.canceled -%}
                     {% if is_current -%}
-                      {% set rendered = '<strong>▶ ' ~ text ~ '</strong>' -%}
+                      {% set rendered = '<mark><strong>▶ ' ~ text ~ '</strong></mark>' -%}
                     {% elif lesson.canceled -%}
-                      {% set rendered = ('<del>' ~ text ~ '</del>') if is_today_column else ('~~' ~ text ~ '~~') -%}
+                      {% set rendered = '~~' ~ text ~ '~~' -%}
                     {% else -%}
-                      {% set rendered = ('<strong>' ~ text ~ '</strong>') if is_today_column else ('**' ~ text ~ '**') -%}
+                      {% set rendered = '**' ~ text ~ '**' -%}
                     {% endif -%}
                     {% set cell.items = cell.items + [rendered] -%}
                   {% endfor -%}
-                  {% set cell_content = cell.items | join(' / ') -%}
-                  {% if is_today_column -%}
-                    {% set cell_content = '<mark>' ~ (cell_content if cell_content else '&nbsp;') ~ '</mark>' -%}
-                  {% endif -%}
-                  {% set row.value = row.value ~ ' ' ~ cell_content ~ ' |' -%}
+                  {% set row.value = row.value ~ ' ' ~ (cell.items | join(' / ')) ~ ' |' -%}
                 {% endfor -%}
                 {% set ns.rows = ns.rows + [row.value] -%}
               {% endfor -%}
