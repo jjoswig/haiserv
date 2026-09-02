@@ -12,6 +12,8 @@
 #
 # The dashboard uses only Home Assistant's built-in Markdown card and the
 # integration's `lessons` attribute. No credentials or custom cards are needed.
+# The template emits a native Markdown pipe table; raw HTML tables are not
+# rendered by the built-in card. Multiple lessons in one cell use " / ".
 
 title: Stundenplan
 views:
@@ -25,64 +27,42 @@ views:
           - sensor.iserv_timetable
           - sensor.iserv_next_week_timetable
         content: |-
-          {% macro timetable(entity, heading) %}
-            {% set lessons = state_attr(entity, 'lessons') or [] %}
-            {% set days = [
-              ['Monday', 'Montag'],
-              ['Tuesday', 'Dienstag'],
-              ['Wednesday', 'Mittwoch'],
-              ['Thursday', 'Donnerstag'],
-              ['Friday', 'Freitag']
-            ] %}
-            {% set ns = namespace(slots=[]) %}
-            {% for lesson in lessons %}
-              {% set slot = lesson.start_time ~ '|' ~ lesson.end_time %}
-              {% if slot not in ns.slots %}
-                {% set ns.slots = ns.slots + [slot] %}
-              {% endif %}
-            {% endfor %}
-
-            ## {{ heading }}
-
-            {% if lessons | count == 0 %}
-              _Keine Stundenplandaten verfügbar._
-            {% else %}
-              <table>
-                <thead>
-                  <tr>
-                    <th>Zeit</th>
-                    {% for day in days %}<th>{{ day[1] }}</th>{% endfor %}
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for slot in ns.slots | sort %}
-                    {% set times = slot.split('|') %}
-                    <tr>
-                      <th>{{ times[0] }}<br>–{{ times[1] }}</th>
-                      {% for day in days %}
-                        {% set matches = lessons
-                          | selectattr('day', 'eq', day[0])
-                          | selectattr('start_time', 'eq', times[0])
-                          | selectattr('end_time', 'eq', times[1])
-                          | list %}
-                        <td>
-                          {% for lesson in matches %}
-                            {% set room = ' · ' ~ lesson.room if lesson.room else '' %}
-                            {% if lesson.canceled %}
-                              <span style="color: var(--disabled-text-color); opacity: 0.55;"><del>{{ lesson.subject | e }}{{ room | e }}</del></span>
-                            {% else %}
-                              <strong>{{ lesson.subject | e }}</strong>{{ room | e }}
-                            {% endif %}
-                            {% if not loop.last %}<br>{% endif %}
-                          {% endfor %}
-                        </td>
-                      {% endfor %}
-                    </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            {% endif %}
-          {% endmacro %}
+          {% macro timetable(entity, heading) -%}
+            {% set lessons = state_attr(entity, 'lessons') or [] -%}
+            {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] -%}
+            {% set ns = namespace(slots=[], rows=[
+              '| Zeit | Montag | Dienstag | Mittwoch | Donnerstag | Freitag |',
+              '| :--- | :--- | :--- | :--- | :--- | :--- |'
+            ]) -%}
+            {% for lesson in lessons -%}
+              {% set slot = lesson.start_time ~ '|' ~ lesson.end_time -%}
+              {% if slot not in ns.slots -%}
+                {% set ns.slots = ns.slots + [slot] -%}
+              {% endif -%}
+            {% endfor -%}
+            {{ '## ' ~ heading ~ '\n\n' -}}
+            {% if lessons | count == 0 -%}
+              {{ '_Keine Stundenplandaten verfügbar._' -}}
+            {% else -%}
+              {% for slot in ns.slots | sort -%}
+                {% set times = slot.split('|') -%}
+                {% set row = namespace(value='| ' ~ times[0] ~ '–' ~ times[1] ~ ' |') -%}
+                {% for day in days -%}
+                  {% set matches = lessons | selectattr('day', 'eq', day) | selectattr('start_time', 'eq', times[0]) | selectattr('end_time', 'eq', times[1]) | list -%}
+                  {% set cell = namespace(items=[]) -%}
+                  {% for lesson in matches -%}
+                    {% set subject = lesson.subject | replace('|', '\\|') -%}
+                    {% set room = lesson.room | default('', true) | replace('|', '\\|') -%}
+                    {% set text = subject ~ (' · ' ~ room if room else '') -%}
+                    {% set cell.items = cell.items + [('~~' ~ text ~ '~~') if lesson.canceled else ('**' ~ text ~ '**')] -%}
+                  {% endfor -%}
+                  {% set row.value = row.value ~ ' ' ~ (cell.items | join(' / ')) ~ ' |' -%}
+                {% endfor -%}
+                {% set ns.rows = ns.rows + [row.value] -%}
+              {% endfor -%}
+              {{ ns.rows | join('\n') -}}
+            {% endif -%}
+          {%- endmacro %}
 
           {{ timetable('sensor.iserv_timetable', 'Aktuelle Woche') }}
 

@@ -139,11 +139,13 @@ the server returned an empty timetable.
 ## Timetable dashboard
 
 [`dashboards/timetable.yaml`](dashboards/timetable.yaml) provides a ready-to-use
-Lovelace dashboard for the current and following week. It arranges Monday
-through Friday as columns and lesson times as rows, and renders canceled
-lessons muted and struck through. The dashboard uses the `lessons` attributes
-of both timetable sensors and Home Assistant's built-in Markdown card; it does
-not require a custom card.
+Lovelace dashboard for the current and following week. It generates a native
+Markdown pipe table with Monday through Friday as columns and lesson times as
+rows. Subjects are bold, canceled lessons use Markdown strikethrough, and
+multiple lessons in one cell are separated with ` / `. The built-in Markdown
+card does not render raw HTML tables, so the dashboard intentionally contains
+no `<table>` markup. It reads the `lessons` attributes of both timetable sensors
+and does not require a custom card.
 
 Open a Home Assistant dashboard, select **Edit dashboard → three-dot menu → Raw
 configuration editor**, and paste the complete YAML file. Before saving, check
