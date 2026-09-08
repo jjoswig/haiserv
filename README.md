@@ -1,6 +1,6 @@
 # HAiServ
 
-HAiServ is a custom [Home Assistant](https://www.home-assistant.io/) integration for retrieving timetable data from an [IServ](https://iserv.de/) server. It authenticates with an existing IServ account, fetches the current and following week's timetables, and exposes the next lesson and full timetable data as sensors.
+HAiServ is a custom [Home Assistant](https://www.home-assistant.io/) integration for retrieving timetable data and Elternbrief (parent letters) from an [IServ](https://iserv.de/) server. It authenticates with an existing IServ account, fetches the current and following week's timetables, monitors the Elternbrief inbox, and exposes the data as sensors.
 
 > [!IMPORTANT]
 > HAiServ is an early-stage, unofficial project and is not affiliated with or endorsed by IServ GmbH. IServ installations can differ, so compatibility with every server is not guaranteed.
@@ -14,12 +14,13 @@ HAiServ is a custom [Home Assistant](https://www.home-assistant.io/) integration
 - Hourly timetable refresh
 - Sensor state showing the next lesson for the current day
 - Structured lesson data and a Markdown timetable in sensor attributes
+- Elternbrief (parent letter) inbox monitoring with unread count
 - Retention of previously fetched data during temporary connection failures
 
 ## Requirements
 
 - A working Home Assistant installation
-- An IServ account with access to timetable data
+- An IServ account with access to timetable and Elternbrief data
 - The HTTPS base URL of the IServ server, for example `https://school.iserv.de`
 
 ## Local CLI debugger
@@ -44,7 +45,7 @@ ISERV_PASSWORD='your-password' python cli.py \
   --both
 ```
 
-Useful options:
+Useful timetable options:
 
 - `--week current|next` — fetch one week (default: `current`)
 - `--both` — print the current and following week
@@ -55,8 +56,36 @@ Useful options:
   history or process listings and is therefore not recommended
 
 The normal output contains a Markdown timetable and the complete, structured
-JSON response with lesson count and ISO week number. Exit code `0` indicates
-success; `2` means invalid arguments, `3`
+JSON response with lesson count and ISO week number.
+
+### Elternbrief subcommand
+
+List and read parent letters from the command line using the `elternbrief`
+subcommand (also available as `parentletter`):
+
+```bash
+# List all letters
+python cli.py --url https://school.iserv.de --username student elternbrief
+
+# Read the full text of one letter
+python cli.py --url https://school.iserv.de --username student \
+  elternbrief --read LETTER_UUID/CHILD_UUID
+
+# Mark a letter as read
+python cli.py --url https://school.iserv.de --username student \
+  elternbrief --mark-read LETTER_UUID/CHILD_UUID
+```
+
+The list output is a table with columns for unread status, date, sender, child,
+and subject. UUIDs appear in the sensor attributes and can be copied from there.
+
+Options:
+
+- `--read LETTER_UUID/CHILD_UUID` — fetch and print the full letter text
+- `--mark-read LETTER_UUID/CHILD_UUID` — submit the mark-as-read form
+- `--verbose` — print safe diagnostics to stderr
+
+Exit code `0` indicates success; `2` means invalid arguments, `3`
 means authentication failure, and `4` means a connection or network failure.
 Only use this tool on a trusted machine and never paste passwords or raw
 responses containing private school data into public issue reports. Verbose
@@ -86,14 +115,17 @@ Enter the following values in the setup dialog:
 
 HAiServ validates the connection before creating the Home Assistant config entry. Accounts are distinguished by username and server URL.
 
-## Entity
+## Entities
 
-The integration creates two sensors:
+The integration creates three sensors:
 
 - **iServ Timetable** — the current calendar week's timetable and next lesson
 - **iServ Next Week Timetable** — the following Monday-to-Friday timetable
+- **iServ Parent Letters** — unread Elternbrief count and full letter list
 
-### State
+### iServ Timetable
+
+#### State
 
 The state is one of:
 
@@ -107,7 +139,7 @@ Example:
 Mathematics 08:00-08:45
 ```
 
-### Attributes
+#### Attributes
 
 | Attribute | Description |
 | --- | --- |
@@ -135,6 +167,47 @@ content: "{{ state_attr('sensor.iserv_next_week_timetable', 'timetable_table') }
 
 Its state is the number of lessons in the following week, or `No lessons` if
 the server returned an empty timetable.
+
+### iServ Parent Letters
+
+Polls `/iserv/parentletter/parent/index` on the same 60-minute interval as the
+timetable sensors. If the Elternbrief endpoint is unavailable, this sensor
+becomes unavailable while the timetable sensors continue to function normally.
+
+#### State
+
+The state is one of:
+
+- `N unread` when at least one letter has not been read (e.g. `2 unread`)
+- `No unread letters` when all letters have been read
+- `No letters` when no letters are in the inbox
+
+#### Attributes
+
+| Attribute | Description |
+| --- | --- |
+| `letters` | List of letter objects (see keys below) |
+| `unread_count` | Number of unread letters as an integer |
+| `total_count` | Total number of letters fetched |
+| `last_updated` | ISO 8601 timestamp generated when the attributes are read |
+
+Each entry in the `letters` list contains:
+
+| Key | Description |
+| --- | --- |
+| `letter_uuid` | UUID of the letter |
+| `child_uuid` | UUID of the child the letter is addressed to |
+| `subject` | Subject line of the letter |
+| `sender` | Primary sender name |
+| `additional_senders` | List of additional sender names (may be empty) |
+| `child` | Name of the student |
+| `recipient` | Recipient group label (e.g. `Klasse o12a`) |
+| `created_at` | ISO 8601 timestamp or `null` |
+| `is_unread` | Boolean — `true` if the letter has not yet been read |
+
+The `body_html` field is intentionally excluded from attributes to keep
+the attribute payload small. Use the CLI `--read` option to fetch the full
+letter text on demand.
 
 ## Timetable dashboard
 
@@ -169,6 +242,7 @@ For a manual installation, replace `<config>/custom_components/haiserv` with the
 - **Authentication failed:** Verify the username and password by signing in to the same IServ server in a browser.
 - **Cannot connect:** Verify the server URL and Home Assistant's network access.
 - **No lessons:** Confirm that the account can access timetable data and that the server returns the expected timetable format.
+- **Parent letters unavailable:** Confirm that the IServ account has access to the Elternbrief module. The timetable sensors are unaffected.
 
 Home Assistant logs for `custom_components.haiserv` can provide additional details. Passwords are not intentionally written to the integration's logs.
 

@@ -13,8 +13,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MAX_CONSECUTIVE_FAILURES
-from .coordinator import IServCoordinator
+from .coordinator import IServCoordinator, IServParentLetterCoordinator
 from .parser import format_markdown_table, get_next_lesson
+from .parentletter_parser import ParentLetter
 
 
 async def async_setup_entry(
@@ -37,6 +38,12 @@ async def async_setup_entry(
     )
     if next_week_coordinator is not None:
         entities.append(IServNextWeekTimetableSensor(next_week_coordinator, entry))
+
+    parentletter_coordinator: IServParentLetterCoordinator | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_parentletter"
+    )
+    if parentletter_coordinator is not None:
+        entities.append(IServParentLetterSensor(parentletter_coordinator, entry))
 
     async_add_entities(entities)
 
@@ -135,3 +142,89 @@ class IServNextWeekTimetableSensor(IServTimetableSensor):
         if not lessons:
             return "No lessons"
         return f"{len(lessons)} lessons"
+
+
+class IServParentLetterSensor(
+    CoordinatorEntity[IServParentLetterCoordinator], SensorEntity
+):
+    """Sensor entity exposing unread Elternbrief (parent letter) count and list."""
+
+    _attr_name = "iServ Parent Letters"
+
+    def __init__(
+        self, coordinator: IServParentLetterCoordinator, entry: ConfigEntry
+    ) -> None:
+        """Initialize the parent-letter sensor.
+
+        Args:
+            coordinator: The IServParentLetterCoordinator managing data fetching.
+            entry: The config entry for this integration instance.
+        """
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_parentletter"
+
+    @property
+    def native_value(self) -> str:
+        """Return the number of unread Elternbriefe as a human-readable string.
+
+        Returns:
+            - "N unread" when there is at least one unread letter
+            - "No unread letters" when all letters have been read
+            - "No letters" when no letters are available
+        """
+        letters: list[ParentLetter] = self.coordinator.data or []
+        if not letters:
+            return "No letters"
+        unread = sum(1 for letter in letters if letter.is_unread)
+        if unread == 0:
+            return "No unread letters"
+        return f"{unread} unread"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return letter list and metadata as state attributes.
+
+        Returns:
+            Dict with:
+            - "letters": list of letter dicts (without body_html to keep size small)
+            - "unread_count": integer count of unread letters
+            - "total_count": total number of letters fetched
+            - "last_updated": ISO 8601 timestamp of last successful update
+        """
+        letters: list[ParentLetter] = self.coordinator.data or []
+
+        def _letter_to_dict(letter: ParentLetter) -> dict[str, Any]:
+            return {
+                "letter_uuid": letter.letter_uuid,
+                "child_uuid": letter.child_uuid,
+                "subject": letter.subject,
+                "sender": letter.sender,
+                "additional_senders": letter.additional_senders,
+                "child": letter.child,
+                "recipient": letter.recipient,
+                "created_at": (
+                    letter.created_at.isoformat() if letter.created_at else None
+                ),
+                "is_unread": letter.is_unread,
+            }
+
+        return {
+            "letters": [_letter_to_dict(letter) for letter in letters],
+            "unread_count": sum(1 for letter in letters if letter.is_unread),
+            "total_count": len(letters),
+            "last_updated": datetime.now().isoformat(),
+        }
+
+    @property
+    def available(self) -> bool:
+        """Return True unless too many consecutive failures with no cached data.
+
+        Returns False only when consecutive failures >= MAX_CONSECUTIVE_FAILURES
+        AND no prior data exists.
+        """
+        if (
+            self.coordinator.consecutive_failures >= MAX_CONSECUTIVE_FAILURES
+            and not self.coordinator.data
+        ):
+            return False
+        return True

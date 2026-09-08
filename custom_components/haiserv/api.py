@@ -429,6 +429,174 @@ class IServClient:
             ) from err
 
 
+    # ------------------------------------------------------------------
+    # Elternbrief (parent letter) methods
+    # ------------------------------------------------------------------
+
+    PARENTLETTER_LIST_PATH = "/iserv/parentletter/parent/index"
+    PARENTLETTER_SHOW_PATH = "/iserv/parentletter/parent/show/{letter_uuid}/{child_uuid}"
+    PARENTLETTER_MARK_READ_PATH = "/iserv/parentletter/parent/mark-as-read/{letter_uuid}/{child_uuid}"
+
+    async def fetch_parentletter_list(self) -> str:
+        """Fetch the Elternbrief list-view HTML page.
+
+        Re-authenticates once on session expiry (HTTP 401/403) before raising.
+
+        Returns:
+            Raw HTML of ``/iserv/parentletter/parent/index``.
+
+        Raises:
+            AuthenticationError: If authentication fails.
+            CannotConnect: If the connection times out or fails.
+        """
+        url = f"{self._base_url}{self.PARENTLETTER_LIST_PATH}"
+        try:
+            return await self._do_fetch_page(url)
+        except AuthenticationError:
+            await self.authenticate()
+            return await self._do_fetch_page(url)
+
+    async def fetch_parentletter_detail(
+        self, letter_uuid: str, child_uuid: str
+    ) -> str:
+        """Fetch the detail HTML page for one Elternbrief.
+
+        Re-authenticates once on session expiry before raising.
+
+        Args:
+            letter_uuid: UUID of the letter.
+            child_uuid: UUID of the child the letter is addressed to.
+
+        Returns:
+            Raw HTML of the detail page.
+
+        Raises:
+            AuthenticationError: If authentication fails.
+            CannotConnect: If the connection times out or fails.
+        """
+        path = self.PARENTLETTER_SHOW_PATH.format(
+            letter_uuid=letter_uuid, child_uuid=child_uuid
+        )
+        url = f"{self._base_url}{path}"
+        try:
+            return await self._do_fetch_page(url)
+        except AuthenticationError:
+            await self.authenticate()
+            return await self._do_fetch_page(url)
+
+    async def mark_parentletter_read(
+        self, letter_uuid: str, child_uuid: str, csrf_token: str
+    ) -> bool:
+        """Submit the mark-as-read form for one Elternbrief.
+
+        Posts the CSRF-protected form extracted from the detail page.
+
+        Args:
+            letter_uuid: UUID of the letter.
+            child_uuid: UUID of the child the letter is addressed to.
+            csrf_token: CSRF token from the detail-page form.
+
+        Returns:
+            True if the server accepted the submission (HTTP 2xx/3xx).
+
+        Raises:
+            AuthenticationError: If the session is expired.
+            CannotConnect: If the connection times out or fails.
+        """
+        path = self.PARENTLETTER_MARK_READ_PATH.format(
+            letter_uuid=letter_uuid, child_uuid=child_uuid
+        )
+        url = f"{self._base_url}{path}"
+        payload = {"_token": csrf_token, "submit": "1"}
+        try:
+            return await self._do_post_form(url, payload)
+        except AuthenticationError:
+            await self.authenticate()
+            return await self._do_post_form(url, payload)
+
+    async def _do_fetch_page(self, url: str) -> str:
+        """GET a page and return its text, raising on auth/connect failures.
+
+        Args:
+            url: Full URL to fetch.
+
+        Returns:
+            Response body as a string.
+
+        Raises:
+            AuthenticationError: On HTTP 401/403 or login-page redirect.
+            CannotConnect: On timeout or network error.
+        """
+        try:
+            timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+            async with self._session.get(url, timeout=timeout) as response:
+                self._debug_response("GET", response)
+                if response.status in (401, 403):
+                    self._authenticated = False
+                    raise AuthenticationError(
+                        "Session expired or authentication required"
+                    )
+                if _is_auth_redirect(response):
+                    self._authenticated = False
+                    raise AuthenticationError("iServ redirected to authentication")
+                await _raise_for_status(response)
+                body = await _read_response_text(response)
+                if _is_login_page(body):
+                    self._authenticated = False
+                    raise AuthenticationError("iServ returned the login page")
+                return body
+        except (AuthenticationError, _EndpointUnavailable):
+            raise
+        except asyncio.TimeoutError as err:
+            raise CannotConnect(
+                f"Request to {url} timed out after {REQUEST_TIMEOUT}s"
+            ) from err
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnect(f"Cannot connect to {url}: {err}") from err
+        except aiohttp.ClientError as err:
+            raise CannotConnect(f"Request error for {url}: {err}") from err
+
+    async def _do_post_form(self, url: str, payload: dict[str, str]) -> bool:
+        """POST a form payload and return True on a 2xx/3xx response.
+
+        Args:
+            url: Full URL to post to.
+            payload: Form fields to submit.
+
+        Returns:
+            True on success.
+
+        Raises:
+            AuthenticationError: On HTTP 401/403.
+            CannotConnect: On timeout or network error.
+        """
+        try:
+            timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+            async with self._session.post(
+                url, data=payload, timeout=timeout, allow_redirects=True
+            ) as response:
+                self._debug_response("POST", response)
+                if response.status in (401, 403):
+                    self._authenticated = False
+                    raise AuthenticationError(
+                        "Session expired during form POST"
+                    )
+                if _is_auth_redirect(response):
+                    self._authenticated = False
+                    raise AuthenticationError("iServ redirected to authentication")
+                await _raise_for_status(response)
+                return True
+        except AuthenticationError:
+            raise
+        except asyncio.TimeoutError as err:
+            raise CannotConnect(
+                f"Request to {url} timed out after {REQUEST_TIMEOUT}s"
+            ) from err
+        except aiohttp.ClientConnectorError as err:
+            raise CannotConnect(f"Cannot connect to {url}: {err}") from err
+        except aiohttp.ClientError as err:
+            raise CannotConnect(f"Request error for {url}: {err}") from err
+
     def _debug_response(self, method: str, response: aiohttp.ClientResponse) -> None:
         """Report safe request diagnostics without credentials or query values."""
         if self._debug_callback is None:

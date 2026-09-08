@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import AuthenticationError, CannotConnect, IServClient
 from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
 from .parser import Lesson, parse_timetable, sort_lessons
+from .parentletter_parser import ParentLetter, parse_parentletter_list
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,3 +105,74 @@ class IServCoordinator(DataUpdateCoordinator[list[Lesson]]):
         self.timetable_data = timetable_data
 
         return sorted_lessons
+
+
+class IServParentLetterCoordinator(DataUpdateCoordinator[list[ParentLetter]]):
+    """Coordinator that polls the iServ Elternbrief (parent letter) endpoint."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: IServClient,
+    ) -> None:
+        """Initialize the parent-letter coordinator.
+
+        Args:
+            hass: The Home Assistant instance.
+            client: An authenticated IServClient instance.
+        """
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_parentletter",
+            update_interval=timedelta(minutes=DEFAULT_UPDATE_INTERVAL),
+        )
+        self.client = client
+        self.consecutive_failures: int = 0
+
+    async def _async_update_data(self) -> list[ParentLetter]:
+        """Fetch and parse the Elternbrief list.
+
+        Returns:
+            List of ParentLetter objects, sorted newest-first by created_at.
+
+        Raises:
+            UpdateFailed: If the fetch fails after a re-authentication attempt.
+        """
+        try:
+            html = await self.client.fetch_parentletter_list()
+        except AuthenticationError:
+            try:
+                await self.client.authenticate()
+                html = await self.client.fetch_parentletter_list()
+            except (AuthenticationError, CannotConnect) as err:
+                self.consecutive_failures += 1
+                _LOGGER.error(
+                    "Failed to fetch Elternbrief list after re-authentication "
+                    "(consecutive failures: %d): %s",
+                    self.consecutive_failures,
+                    err,
+                )
+                raise UpdateFailed(
+                    f"Authentication failed after retry: {err}"
+                ) from err
+        except CannotConnect as err:
+            self.consecutive_failures += 1
+            _LOGGER.warning(
+                "Failed to connect to iServ for Elternbrief "
+                "(consecutive failures: %d): %s",
+                self.consecutive_failures,
+                err,
+            )
+            raise UpdateFailed(f"Cannot connect to iServ: {err}") from err
+
+        letters = parse_parentletter_list(html)
+        # Sort: unread first, then newest-first by created_at
+        letters.sort(
+            key=lambda letter: (
+                not letter.is_unread,
+                -(letter.created_at.timestamp() if letter.created_at else 0),
+            )
+        )
+        self.consecutive_failures = 0
+        return letters

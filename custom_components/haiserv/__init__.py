@@ -29,7 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     from .api import IServClient
     from .const import DOMAIN
-    from .coordinator import IServCoordinator
+    from .coordinator import IServCoordinator, IServParentLetterCoordinator
 
     # Get credentials from config entry data
     url = entry.data["url"]
@@ -58,6 +58,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     hass.data[DOMAIN][f"{entry.entry_id}_next_week"] = next_week_coordinator
 
+    # Set up the Elternbrief coordinator. On failure, the sensor will be
+    # unavailable but setup proceeds so timetable entities remain functional.
+    parentletter_coordinator = IServParentLetterCoordinator(hass, client)
+    try:
+        await parentletter_coordinator.async_config_entry_first_refresh()
+    except UpdateFailed:
+        parentletter_coordinator.data = []
+    hass.data[DOMAIN][f"{entry.entry_id}_parentletter"] = parentletter_coordinator
+
     # Forward platform setup to the sensor module
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -83,5 +92,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
         hass.data[DOMAIN].pop(f"{entry.entry_id}_next_week", None)
+        hass.data[DOMAIN].pop(f"{entry.entry_id}_parentletter", None)
 
     return unload_ok
