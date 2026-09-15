@@ -1,0 +1,4 @@
+# Extra dependencies for the CLI and MCP server (not needed by the HA integration itself).
+# Install with: pip install -r requirements-cli.txt
+aiohttp
+mcp[cli]>=1.0,<2

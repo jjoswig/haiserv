@@ -76,6 +76,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print safe request, redirect, cookie, and response diagnostics",
     )
 
+    # --- mcp subcommand ---
+    mcp_parser = subparsers.add_parser(
+        "mcp",
+        help=(
+            "Start an MCP server (stdio) so LLM clients can query the "
+            "timetable and parent letters"
+        ),
+    )
+    mcp_parser.add_argument(
+        "--transport",
+        choices=("stdio", "streamable-http"),
+        default="stdio",
+        help="MCP transport to use (default: stdio)",
+    )
+    mcp_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Bind host for streamable-http transport (default: 127.0.0.1)",
+    )
+    mcp_parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Bind port for streamable-http transport (default: 8000)",
+    )
+
     # --- elternbrief / parentletter subcommand ---
     el_parser = subparsers.add_parser(
         "elternbrief",
@@ -244,8 +270,63 @@ async def _cmd_elternbrief(
     return 0
 
 
+async def _cmd_mcp(
+    args: argparse.Namespace, url: str, username: str, password: str
+) -> int:
+    """Handle the ``mcp`` subcommand — start the MCP server with credentials injected.
+
+    Credentials are forwarded to the MCP server process via environment variables
+    so that each tool call can authenticate against iServ without re-prompting.
+    """
+    import importlib
+
+    # Inject credentials into the environment so mcp_server.py can read them.
+    os.environ["ISERV_URL"] = url
+    os.environ["ISERV_USERNAME"] = username
+    os.environ["ISERV_PASSWORD"] = password
+
+    transport = getattr(args, "transport", "stdio")
+    host = getattr(args, "host", "127.0.0.1")
+    port = getattr(args, "port", 8000)
+
+    # Import the server module (sits next to cli.py in the repo root).
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "mcp_server", REPOSITORY_ROOT / "mcp_server.py"
+    )
+    if spec is None or spec.loader is None:
+        print("Error: could not locate mcp_server.py.", file=sys.stderr)
+        return 1
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+
+    server = module.mcp  # FastMCP instance
+
+    if transport == "streamable-http":
+        print(
+            f"Starting HAiServ MCP server (streamable-http) "
+            f"on http://{host}:{port}/mcp",
+            file=sys.stderr,
+        )
+        # run_streamable_http_async is the awaitable counterpart of run().
+        await server.run_streamable_http_async(host=host, port=port)
+    else:
+        # stdio — do not write anything to stdout; the MCP wire uses it.
+        print("Starting HAiServ MCP server (stdio) …", file=sys.stderr)
+        await server.run_stdio_async()  # blocks until the client disconnects
+
+    return 0
+
+
 async def async_main(args: argparse.Namespace) -> int:
     """Run the CLI workflow and return a process exit code."""
+    # The MCP subcommand manages its own connections per tool call — skip the
+    # shared aiohttp session setup and authenticate directly from here.
+    if getattr(args, "command", None) == "mcp":
+        password = _password_from_args(args)
+        return await _cmd_mcp(args, args.url, args.username, password)
+
     from custom_components.haiserv.api import (
         AuthenticationError,
         CannotConnect,
@@ -275,6 +356,7 @@ async def async_main(args: argparse.Namespace) -> int:
             await client.authenticate()
 
             command = getattr(args, "command", None)
+
             if command in ("elternbrief", "parentletter"):
                 return await _cmd_elternbrief(client, args)
 

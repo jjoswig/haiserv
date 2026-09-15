@@ -87,6 +87,87 @@ Options:
 
 Exit code `0` indicates success; `2` means invalid arguments, `3`
 means authentication failure, and `4` means a connection or network failure.
+
+### MCP server subcommand
+
+The `mcp` subcommand starts an [MCP](https://modelcontextprotocol.io/) server
+so any MCP-compatible LLM client (Claude Desktop, Cursor, the MCP Inspector,
+…) can query the timetable and parent letters directly as tools.
+
+```bash
+python cli.py --url https://school.iserv.de --username student mcp
+```
+
+The server speaks the **stdio** transport by default (JSON-RPC over
+stdin/stdout). A **Streamable HTTP** transport is also available:
+
+```bash
+python cli.py --url https://school.iserv.de --username student mcp \
+  --transport streamable-http --host 127.0.0.1 --port 8000
+```
+
+Options:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--transport` | `stdio` | Transport: `stdio` or `streamable-http` |
+| `--host` | `127.0.0.1` | Bind host (streamable-http only) |
+| `--port` | `8000` | Bind port (streamable-http only) |
+
+#### Installing the MCP dependency
+
+The MCP server requires the `mcp` package, which is not part of the Home
+Assistant integration's dependencies. Install it alongside `aiohttp`:
+
+```bash
+pip install -r requirements-cli.txt
+```
+
+#### Available tools
+
+| Tool | Description |
+| --- | --- |
+| `get_full_schedule` | Full timetable for `current` or `next` week as a Markdown table |
+| `get_schedule_for_day` | Timetable filtered to a single weekday (e.g. `"Monday"`) |
+| `get_parentletters` | Overview of all parent letters with UUIDs, sender, date, read status |
+| `get_parentletter_detail` | Full text and metadata of one letter, identified by `letter_uuid` + `child_uuid` |
+
+#### Registering with an MCP client
+
+Most MCP clients (Claude Desktop, Cursor, Kiro, VS Code, etc.) accept a JSON
+config that tells them how to launch the server. Use the venv's Python binary
+directly so all dependencies are available without any activation step:
+
+```json
+{
+  "mcpServers": {
+    "haiserv": {
+      "command": "/path/to/haiserv/.venv/bin/python",
+      "args": [
+        "/path/to/haiserv/cli.py",
+        "--url", "https://school.iserv.de",
+        "--username", "your-username",
+        "--password", "your-password",
+        "mcp"
+      ]
+    }
+  }
+}
+```
+
+Replace `/path/to/haiserv` with the absolute path to the repository and fill
+in your iServ URL and credentials. Where to put this config depends on your
+client:
+
+| Client | Config file |
+| --- | --- |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Cursor | `.cursor/mcp.json` in the repo root, or the global Cursor config |
+| Kiro | `~/.kiro/settings/mcp.json` |
+| VS Code (Copilot) | `.vscode/mcp.json` in the repo root |
+
+For HTTP-based clients, start the server with `--transport streamable-http`
+and register `http://127.0.0.1:8000/mcp` as the endpoint URL.
 Only use this tool on a trusted machine and never paste passwords or raw
 responses containing private school data into public issue reports. Verbose
 output deliberately omits passwords, query-string values, and response bodies.
@@ -250,7 +331,7 @@ Home Assistant logs for `custom_components.haiserv` can provide additional detai
 
 The repository contains unit, integration, and property-based tests under `tests/`.
 
-A local development environment needs the dependencies imported by the test suite, including Home Assistant, pytest, pytest-asyncio, Hypothesis, aioresponses, aiohttp, and voluptuous. Run the tests from the repository root:
+A local development environment needs the dependencies imported by the test suite, including Home Assistant, pytest, pytest-asyncio, Hypothesis, aioresponses, aiohttp, and voluptuous. The CLI and MCP server additionally require the packages listed in `requirements-cli.txt`. Run the tests from the repository root:
 
 ```bash
 python -m pytest
