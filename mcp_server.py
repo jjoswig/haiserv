@@ -18,13 +18,11 @@ IMPORTANT: All diagnostic output must go to stderr — stdout is the MCP wire.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 # ---------------------------------------------------------------------------
 # Make custom_components importable when the file is run directly.
@@ -60,8 +58,11 @@ mcp = FastMCP(
 )
 
 # ---------------------------------------------------------------------------
-# Shared async helpers
+# Shared session — one authenticated IServClient for the server's lifetime.
+# Created lazily on the first tool call and reused for all subsequent ones.
 # ---------------------------------------------------------------------------
+_client = None  # IServClient | None
+_session = None  # aiohttp.ClientSession | None
 
 
 def _get_credentials() -> tuple[str, str, str]:
@@ -77,12 +78,15 @@ def _get_credentials() -> tuple[str, str, str]:
     username = os.environ.get("ISERV_USERNAME", "").strip()
     password = os.environ.get("ISERV_PASSWORD", "").strip()
 
-    missing = [name for name, val in (
-        ("ISERV_URL", url),
-        ("ISERV_USERNAME", username),
-        ("ISERV_PASSWORD", password),
-    ) if not val]
-
+    missing = [
+        name
+        for name, val in (
+            ("ISERV_URL", url),
+            ("ISERV_USERNAME", username),
+            ("ISERV_PASSWORD", password),
+        )
+        if not val
+    ]
     if missing:
         raise ValueError(
             f"Missing required environment variable(s): {', '.join(missing)}. "
@@ -92,32 +96,45 @@ def _get_credentials() -> tuple[str, str, str]:
     return url, username, password
 
 
-async def _make_authenticated_client() -> tuple[Any, Any]:
-    """Create an aiohttp session and an authenticated IServClient.
+async def _get_client():
+    """Return the shared IServClient, creating and authenticating it if needed.
+
+    The session and client are module-level singletons so that the cookie jar
+    survives across tool calls. IServClient already handles transparent
+    re-authentication when a session expires.
 
     Returns:
-        Tuple of (aiohttp.ClientSession, IServClient). The caller is
-        responsible for closing the session after use.
+        An authenticated IServClient instance.
 
     Raises:
         ValueError: When credentials are missing.
         AuthenticationError: When login fails.
         CannotConnect: When the server is unreachable.
     """
-    import aiohttp
+    global _client, _session
 
+    import aiohttp
     from custom_components.haiserv.api import AuthenticationError, CannotConnect, IServClient
 
+    if _client is not None and _client.is_authenticated:
+        return _client
+
+    # Close any stale session before opening a new one.
+    if _session is not None:
+        await _session.close()
+
     url, username, password = _get_credentials()
-    session = aiohttp.ClientSession()
+    _session = aiohttp.ClientSession()
+    _client = IServClient(_session, url, username, password)
     try:
-        client = IServClient(session, url, username, password)
-        await client.authenticate()
+        await _client.authenticate()
     except (AuthenticationError, CannotConnect):
-        await session.close()
+        await _session.close()
+        _session = None
+        _client = None
         raise
 
-    return session, client
+    return _client
 
 
 # ---------------------------------------------------------------------------
@@ -146,12 +163,9 @@ async def get_full_schedule(week: str = "current") -> str:
     week_offset = 0 if week == "current" else 1
     target_iso_week = (datetime.now() + timedelta(weeks=week_offset)).isocalendar()[1]
 
-    session, client = await _make_authenticated_client()
-    try:
-        raw = await client.fetch_timetable(week=target_iso_week)
-        lessons = sort_lessons(parse_timetable(str(raw), locale="en"))
-    finally:
-        await session.close()
+    client = await _get_client()
+    raw = await client.fetch_timetable(week=target_iso_week)
+    lessons = sort_lessons(parse_timetable(str(raw), locale="en"))
 
     if not lessons:
         return f"No lessons found for the {week} week (ISO week {target_iso_week})."
@@ -194,12 +208,9 @@ async def get_schedule_for_day(day: str, week: str = "current") -> str:
     week_offset = 0 if week == "current" else 1
     target_iso_week = (datetime.now() + timedelta(weeks=week_offset)).isocalendar()[1]
 
-    session, client = await _make_authenticated_client()
-    try:
-        raw = await client.fetch_timetable(week=target_iso_week)
-        all_lessons = sort_lessons(parse_timetable(str(raw), locale="en"))
-    finally:
-        await session.close()
+    client = await _get_client()
+    raw = await client.fetch_timetable(week=target_iso_week)
+    all_lessons = sort_lessons(parse_timetable(str(raw), locale="en"))
 
     day_lessons = [lesson for lesson in all_lessons if lesson.day == normalised_day]
 
@@ -235,12 +246,8 @@ async def get_parentletters() -> str:
     """
     from custom_components.haiserv.parentletter_parser import parse_parentletter_list
 
-    session, client = await _make_authenticated_client()
-    try:
-        html = await client.fetch_parentletter_list()
-    finally:
-        await session.close()
-
+    client = await _get_client()
+    html = await client.fetch_parentletter_list()
     letters = parse_parentletter_list(html)
 
     if not letters:
@@ -303,7 +310,6 @@ async def get_parentletter_detail(letter_uuid: str, child_uuid: str) -> str:
     if not letter_uuid or not child_uuid:
         return "Both letter_uuid and child_uuid are required."
 
-    # Create a stub ParentLetter so the detail parser has something to enrich.
     stub = ParentLetter(
         letter_uuid=letter_uuid,
         child_uuid=child_uuid,
@@ -311,15 +317,10 @@ async def get_parentletter_detail(letter_uuid: str, child_uuid: str) -> str:
         sender="",
     )
 
-    session, client = await _make_authenticated_client()
-    try:
-        html = await client.fetch_parentletter_detail(letter_uuid, child_uuid)
-    finally:
-        await session.close()
-
+    client = await _get_client()
+    html = await client.fetch_parentletter_detail(letter_uuid, child_uuid)
     enriched = parse_parentletter_detail(html, stub)
 
-    # Convert HTML body to plain text for LLM consumption.
     body_plain = _html_to_text(enriched.body_html or html)
 
     date_str = (
@@ -386,7 +387,6 @@ def _html_to_text(html: str) -> str:
 
         def get_text(self) -> str:
             raw = "".join(self._parts)
-            # Collapse runs of whitespace while preserving single newlines.
             raw = re.sub(r"[ \t]+", " ", raw)
             raw = re.sub(r"\n{3,}", "\n\n", raw)
             return raw.strip()
