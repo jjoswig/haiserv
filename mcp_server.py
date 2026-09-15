@@ -149,8 +149,7 @@ async def get_full_schedule(week: str = "current") -> str:
     session, client = await _make_authenticated_client()
     try:
         raw = await client.fetch_timetable(week=target_iso_week)
-        timetable_json = getattr(raw, "raw_response", raw)
-        lessons = sort_lessons(parse_timetable(timetable_json, locale="en"))
+        lessons = sort_lessons(parse_timetable(str(raw), locale="en"))
     finally:
         await session.close()
 
@@ -198,8 +197,7 @@ async def get_schedule_for_day(day: str, week: str = "current") -> str:
     session, client = await _make_authenticated_client()
     try:
         raw = await client.fetch_timetable(week=target_iso_week)
-        timetable_json = getattr(raw, "raw_response", raw)
-        all_lessons = sort_lessons(parse_timetable(timetable_json, locale="en"))
+        all_lessons = sort_lessons(parse_timetable(str(raw), locale="en"))
     finally:
         await session.close()
 
