@@ -297,7 +297,12 @@ class IServClient:
             self._timetable_path = self.TIMETABLE_PATH
             return TimetableResult(body)
         except _EndpointUnavailable:
-            body = await self._fetch_timetable_data(week)
+            try:
+                body = await self._fetch_timetable_data(week)
+            except _EndpointUnavailable as err:
+                raise CannotConnect(
+                    "No timetable endpoint is available on this iServ instance"
+                ) from err
             self._timetable_path = self.TIMETABLE_DATA_PATH
             return body
 
