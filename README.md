@@ -5,6 +5,14 @@ HAiServ is a custom [Home Assistant](https://www.home-assistant.io/) integration
 > [!IMPORTANT]
 > HAiServ is an early-stage, unofficial project and is not affiliated with or endorsed by IServ GmbH. IServ installations can differ, so compatibility with every server is not guaranteed.
 
+## Support this project
+
+As an independent software developer, I'm passionate about building useful tools and making them freely available to the community. Behind every project, there's more than just development work: servers, domains, APIs, hosting — the running costs add up quickly. I fund all of this out of my own pocket because I believe in the value these projects provide.
+
+If you find my work useful or it saves you some time, I'd genuinely appreciate a coffee ☕ — it keeps me going and guarantees you some good karma. The universe doesn't forget these things! 😄
+
+[![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=&slug=jjoswig&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/jjoswig)
+
 ## Features
 
 - UI-based setup through Home Assistant's integration flow
