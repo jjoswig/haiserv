@@ -2,6 +2,9 @@
 
 HAiServ is a custom [Home Assistant](https://www.home-assistant.io/) integration for retrieving timetable data and Elternbrief (parent letters) from an [IServ](https://iserv.de/) server. It authenticates with an existing IServ account, fetches the current and following week's timetables, monitors the Elternbrief inbox, and exposes the data as sensors.
 
+## Quick Start
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=jjoswig&repository=haiserv&category=integration)
+
 > [!IMPORTANT]
 > HAiServ is an early-stage, unofficial project and is not affiliated with or endorsed by IServ GmbH. IServ installations can differ, so compatibility with every server is not guaranteed.
 
