@@ -74,6 +74,7 @@ class IServConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             "username": username,
                             "password": password,
                         },
+                        description_placeholders={"url": url},
                     )
 
         return self.async_show_form(
