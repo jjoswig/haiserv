@@ -90,6 +90,8 @@ class IServClient:
     CURRENT_TIMETABLE_PATH = "/iserv/dieschulapp/api/1.0/current-timetable/"
     TIMETABLE_PATH = "/iserv/plan/show/raw"
     TIMETABLE_DATA_PATH = "/iserv/timetable/data"
+    TIME_TABLE_DATA_PATH = "/iserv/time-table/data"
+    DATA_TIMETABLE_PATHS = (TIME_TABLE_DATA_PATH, TIMETABLE_DATA_PATH)
 
     def __init__(
         self,
@@ -97,6 +99,7 @@ class IServClient:
         base_url: str,
         username: str,
         password: str,
+        child_id: str | None = None,
         debug_callback: Callable[[str], None] | None = None,
     ) -> None:
         """Initialize the iServ client.
@@ -106,11 +109,15 @@ class IServClient:
             base_url: The base URL of the iServ server (e.g., "https://school.iserv.de").
             username: The iServ username.
             password: The iServ password.
+            child_id: UUID of the linked child for parent accounts. Some iServ
+                generation timetable modules only return data when an explicit
+                child is selected.
         """
         self._session = session
         self._base_url = _normalize_base_url(base_url)
         self._username = username
         self._password = password
+        self._child_id = child_id
         self._debug_callback = debug_callback
         self._authenticated = False
         self._timetable_path: str | None = None
@@ -273,9 +280,11 @@ class IServClient:
             except _EndpointUnavailable:
                 self._timetable_path = None
 
-        if self._timetable_path == self.TIMETABLE_DATA_PATH:
+        if self._timetable_path in self.DATA_TIMETABLE_PATHS:
             try:
-                return await self._fetch_timetable_data(week)
+                return await self._fetch_timetable_data(
+                    week, self._timetable_path
+                )
             except _EndpointUnavailable:
                 self._timetable_path = None
 
@@ -297,14 +306,23 @@ class IServClient:
             self._timetable_path = self.TIMETABLE_PATH
             return TimetableResult(body)
         except _EndpointUnavailable:
+            pass
+
+        # Try the newer "time-table" module first, then the classic data
+        # endpoint. Both are treated as unavailable on 403/404 so a missing
+        # child selection or module mismatch is not reported as a session
+        # expiry.
+        for path in self.DATA_TIMETABLE_PATHS:
             try:
-                body = await self._fetch_timetable_data(week)
-            except _EndpointUnavailable as err:
-                raise CannotConnect(
-                    "No timetable endpoint is available on this iServ instance"
-                ) from err
-            self._timetable_path = self.TIMETABLE_DATA_PATH
-            return body
+                result = await self._fetch_timetable_data(week, path)
+            except _EndpointUnavailable:
+                continue
+            self._timetable_path = path
+            return result
+
+        raise CannotConnect(
+            "No timetable endpoint is available on this iServ instance"
+        )
 
     async def _fetch_current_timetable(self, week: int | None) -> TimetableResult:
         """Fetch DieSchulApp timetable data and convert it to legacy lessons."""
@@ -354,21 +372,47 @@ class IServClient:
         )
         return TimetableResult(normalized, source_body)
 
-    async def _fetch_timetable_data(self, week: int | None) -> TimetableResult:
-        """Fetch and normalize the current iServ timetable JSON response."""
+    async def _fetch_timetable_data(
+        self, week: int | None, path: str | None = None
+    ) -> TimetableResult:
+        """Fetch and normalize the iServ timetable JSON response.
+
+        Args:
+            week: The ISO week to fetch, or None for the current week.
+            path: The data endpoint to query. Defaults to the classic
+                ``/iserv/timetable/data`` module.
+
+        The newer ``/iserv/time-table/data`` module mirrors the web UI query:
+        empty class/teacher/room filters and, for parent accounts, an explicit
+        child selection via ``child`` in the filter and a top-level
+        ``childId`` parameter.
+        """
         start, end = _week_dates(week)
+        is_new_module = path == self.TIME_TABLE_DATA_PATH
         timetable_filter = {
             "startDate": start.strftime("%d.%m.%Y"),
             "endDate": end.strftime("%d.%m.%Y"),
-            "changesUntil": None,
-            "classes": ["%"],
-            "teachers": ["%"],
-            "rooms": ["%"],
         }
+        if is_new_module:
+            timetable_filter["classes"] = []
+            timetable_filter["teachers"] = []
+            timetable_filter["rooms"] = []
+        else:
+            timetable_filter["changesUntil"] = None
+            timetable_filter["classes"] = ["%"]
+            timetable_filter["teachers"] = ["%"]
+            timetable_filter["rooms"] = ["%"]
+
+        params: dict[str, str] = {}
+        if self._child_id:
+            timetable_filter["child"] = self._child_id
+            params["childId"] = self._child_id
+        params["filter"] = json.dumps(timetable_filter, separators=(",", ":"))
+
         body = await self._do_fetch_timetable(
-            f"{self._base_url}{self.TIMETABLE_DATA_PATH}",
-            {"filter": json.dumps(timetable_filter, separators=(",", ":"))},
-            unavailable_statuses=(404,),
+            f"{self._base_url}{path or self.TIMETABLE_DATA_PATH}",
+            params,
+            unavailable_statuses=(403, 404),
         )
         return TimetableResult(_normalize_timetable_data(body), body)
 

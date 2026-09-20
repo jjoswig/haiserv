@@ -40,7 +40,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
 
     # Instantiate the iServ API client
-    client = IServClient(session, url, username, password)
+    client = IServClient(
+        session,
+        url,
+        username,
+        password,
+        child_id=entry.data.get("child_id"),
+    )
 
     # Create and refresh the current-week coordinator
     coordinator = IServCoordinator(hass, client)

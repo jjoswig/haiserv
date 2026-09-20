@@ -46,6 +46,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--password",
         help="iServ password (prefer a hidden prompt or ISERV_PASSWORD)",
     )
+    parser.add_argument(
+        "--child-id",
+        help="Child UUID for parent accounts (required by the time-table module)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     subparsers.required = False  # default command is timetable
@@ -284,6 +288,9 @@ async def _cmd_mcp(
     os.environ["ISERV_URL"] = url
     os.environ["ISERV_USERNAME"] = username
     os.environ["ISERV_PASSWORD"] = password
+    child_id = getattr(args, "child_id", None)
+    if child_id:
+        os.environ["ISERV_CHILD_ID"] = child_id
 
     transport = getattr(args, "transport", "stdio")
     host = getattr(args, "host", "127.0.0.1")
@@ -350,6 +357,7 @@ async def async_main(args: argparse.Namespace) -> int:
             args.url,
             args.username,
             password,
+            child_id=getattr(args, "child_id", None),
             debug_callback=_debug if verbose else None,
         )
         try:

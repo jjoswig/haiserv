@@ -8,6 +8,7 @@ Or directly (credentials come from environment variables):
     ISERV_URL=https://school.iserv.de \\
     ISERV_USERNAME=student \\
     ISERV_PASSWORD=secret \\
+    ISERV_CHILD_ID=<child-uuid>  # optional, for parent accounts \\
     python mcp_server.py
 
 The server speaks stdio (JSON-RPC over stdin/stdout) and is compatible with any
@@ -65,11 +66,12 @@ _client = None  # IServClient | None
 _session = None  # aiohttp.ClientSession | None
 
 
-def _get_credentials() -> tuple[str, str, str]:
+def _get_credentials() -> tuple[str, str, str, str | None]:
     """Read connection credentials from environment variables.
 
     Returns:
-        Tuple of (url, username, password).
+        Tuple of (url, username, password, child_id). child_id is None unless
+        ISERV_CHILD_ID is set (parent accounts on the time-table module).
 
     Raises:
         ValueError: If any required variable is missing or empty.
@@ -77,6 +79,7 @@ def _get_credentials() -> tuple[str, str, str]:
     url = os.environ.get("ISERV_URL", "").strip()
     username = os.environ.get("ISERV_USERNAME", "").strip()
     password = os.environ.get("ISERV_PASSWORD", "").strip()
+    child_id = os.environ.get("ISERV_CHILD_ID", "").strip() or None
 
     missing = [
         name
@@ -93,7 +96,7 @@ def _get_credentials() -> tuple[str, str, str]:
             "Set ISERV_URL, ISERV_USERNAME, and ISERV_PASSWORD before starting the server."
         )
 
-    return url, username, password
+    return url, username, password, child_id
 
 
 async def _get_client():
@@ -123,9 +126,11 @@ async def _get_client():
     if _session is not None:
         await _session.close()
 
-    url, username, password = _get_credentials()
+    url, username, password, child_id = _get_credentials()
     _session = aiohttp.ClientSession()
-    _client = IServClient(_session, url, username, password)
+    _client = IServClient(
+        _session, url, username, password, child_id=child_id
+    )
     try:
         await _client.authenticate()
     except (AuthenticationError, CannotConnect):

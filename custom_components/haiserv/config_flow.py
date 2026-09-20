@@ -22,6 +22,7 @@ DATA_SCHEMA = vol.Schema(
         vol.Required("url"): str,
         vol.Required("username"): str,
         vol.Required("password"): str,
+        vol.Optional("child_id"): str,
     }
 )
 
@@ -41,6 +42,7 @@ class IServConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             url = user_input.get("url", "").strip()
             username = user_input.get("username", "").strip()
             password = user_input.get("password", "")
+            child_id = user_input.get("child_id", "").strip() or None
 
             # Validate all fields are non-empty
             if not url or not username or not password:
@@ -56,7 +58,9 @@ class IServConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Attempt login with IServClient
                 try:
                     session = async_get_clientsession(self.hass)
-                    client = IServClient(session, url, username, password)
+                    client = IServClient(
+                        session, url, username, password, child_id=child_id
+                    )
                     await client.authenticate()
                 except AuthenticationError:
                     errors["base"] = "invalid_auth"
@@ -73,6 +77,7 @@ class IServConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             "url": url,
                             "username": username,
                             "password": password,
+                            "child_id": child_id,
                         },
                         description_placeholders={"url": url},
                     )

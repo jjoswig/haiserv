@@ -93,6 +93,86 @@ def valid_input():
     }
 
 
+# --- Test: Child selection for parent accounts ---
+
+
+class TestChildId:
+    """Tests verifying the optional child_id field for parent accounts."""
+
+    @pytest.mark.asyncio
+    async def test_child_id_stored_in_entry_data(self, flow, valid_input):
+        """A provided child_id is stored in the config entry data."""
+        user_input = {**valid_input, "child_id": "child-123"}
+        with patch(
+            "custom_components.haiserv.config_flow.async_get_clientsession"
+        ) as mock_session_fn, patch(
+            "custom_components.haiserv.config_flow.IServClient"
+        ) as MockClient:
+            mock_session_fn.return_value = MagicMock()
+            mock_client_instance = MagicMock()
+            mock_client_instance.authenticate = AsyncMock()
+            MockClient.return_value = mock_client_instance
+
+            result = await flow.async_step_user(user_input)
+
+        assert result["type"] == "create_entry"
+        assert result["data"]["child_id"] == "child-123"
+
+    @pytest.mark.asyncio
+    async def test_child_id_stripped_of_whitespace(self, flow, valid_input):
+        """child_id is stripped of leading/trailing whitespace."""
+        user_input = {**valid_input, "child_id": "  child-456  "}
+        with patch(
+            "custom_components.haiserv.config_flow.async_get_clientsession"
+        ) as mock_session_fn, patch(
+            "custom_components.haiserv.config_flow.IServClient"
+        ) as MockClient:
+            mock_session_fn.return_value = MagicMock()
+            mock_client_instance = MagicMock()
+            mock_client_instance.authenticate = AsyncMock()
+            MockClient.return_value = mock_client_instance
+
+            result = await flow.async_step_user(user_input)
+
+        assert result["data"]["child_id"] == "child-456"
+
+    @pytest.mark.asyncio
+    async def test_child_id_optional(self, flow, valid_input):
+        """child_id is optional; entries without it store None."""
+        with patch(
+            "custom_components.haiserv.config_flow.async_get_clientsession"
+        ) as mock_session_fn, patch(
+            "custom_components.haiserv.config_flow.IServClient"
+        ) as MockClient:
+            mock_session_fn.return_value = MagicMock()
+            mock_client_instance = MagicMock()
+            mock_client_instance.authenticate = AsyncMock()
+            MockClient.return_value = mock_client_instance
+
+            result = await flow.async_step_user(valid_input)
+
+        assert result["type"] == "create_entry"
+        assert result["data"]["child_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_child_id_passed_to_iserv_client(self, flow, valid_input):
+        """The child_id is forwarded to the IServClient constructor."""
+        user_input = {**valid_input, "child_id": "child-789"}
+        with patch(
+            "custom_components.haiserv.config_flow.async_get_clientsession"
+        ) as mock_session_fn, patch(
+            "custom_components.haiserv.config_flow.IServClient"
+        ) as MockClient:
+            mock_session_fn.return_value = MagicMock()
+            mock_client_instance = MagicMock()
+            mock_client_instance.authenticate = AsyncMock()
+            MockClient.return_value = mock_client_instance
+
+            await flow.async_step_user(user_input)
+
+        assert MockClient.call_args.kwargs["child_id"] == "child-789"
+
+
 # --- Test: Successful flow with valid credentials ---
 
 

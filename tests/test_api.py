@@ -280,3 +280,215 @@ class TestIServClient:
                 await client.fetch_timetable()
 
             assert client.is_authenticated is False
+
+
+# --- Time-table module (issue #2) ---
+
+
+class TestTimeTableModule:
+    """Tests for the newer /iserv/time-table/data module and child selection.
+
+    Covers: 403 handling on data paths (not reported as session expiry),
+    fallback order between the classic and the new data endpoint, and the
+    child/childId parameters sent for parent accounts.
+    """
+
+    BASE_URL = "https://school.iserv.de"
+    LOGIN_URL = f"{BASE_URL}/iserv/auth/login"
+
+    @pytest_asyncio.fixture
+    async def session(self):
+        """Create an aiohttp ClientSession for testing."""
+        session = aiohttp.ClientSession()
+        yield session
+        await session.close()
+
+    @pytest.fixture
+    def client(self, session):
+        """Create a client pinned to the classic data endpoint."""
+        client = IServClient(
+            session=session,
+            base_url=self.BASE_URL,
+            username="testuser",
+            password="testpass",
+        )
+        client._timetable_path = client.TIMETABLE_DATA_PATH
+        return client
+
+    @pytest.mark.asyncio
+    async def test_child_id_stored_on_client(self, session):
+        """child_id is stored on the client for parent accounts."""
+        client = IServClient(
+            session, self.BASE_URL, "user", "pass", child_id="child-123"
+        )
+        assert client._child_id == "child-123"
+
+    @pytest.mark.asyncio
+    async def test_403_on_data_path_is_not_auth_error(self, client):
+        """403 on the data path is treated as endpoint unavailable.
+
+        A permissions/parameter problem must not be reported as an expired
+        session: no AuthenticationError and no spurious re-authentication.
+        All endpoints fail here, so the final result is CannotConnect and
+        the session stays authenticated.
+        """
+        import re
+
+        with aioresponses() as mocked:
+            mocked.post(re.compile(r".*/iserv/auth/login"), status=200)
+            mocked.get(re.compile(r".*current-timetable/.*"), status=403)
+            mocked.get(re.compile(r".*plan/show/raw.*"), status=403)
+            mocked.get(re.compile(r".*time-table/data.*"), status=403)
+            mocked.get(re.compile(r".*timetable/data.*"), status=403)
+
+            await client.authenticate()
+            with pytest.raises(CannotConnect):
+                await client.fetch_timetable()
+
+            assert client.is_authenticated is True
+
+    @pytest.mark.asyncio
+    async def test_403_on_old_data_path_falls_back_to_new(self, session):
+        """Old data path 403 (permission/child issue) falls back to the new module."""
+        import re
+
+        body = (
+            '[{"day":"Monday","start_time":"08:00","end_time":"08:45",'
+            '"subject":"Math","room":"A1"}]'
+        )
+        client = IServClient(session, self.BASE_URL, "user", "pass")
+        client._timetable_path = client.TIMETABLE_DATA_PATH
+
+        with aioresponses() as mocked:
+            mocked.get(re.compile(r".*current-timetable/.*"), status=403)
+            mocked.get(re.compile(r".*plan/show/raw.*"), status=403)
+            mocked.get(
+                re.compile(r".*time-table/data.*"), status=200, body=body
+            )
+            mocked.get(re.compile(r".*timetable/data.*"), status=403)
+
+            result = await client.fetch_timetable(week=42)
+
+            assert "Math" in result
+            assert client._timetable_path == client.TIME_TABLE_DATA_PATH
+
+    @pytest.mark.asyncio
+    async def test_new_module_used_without_child_when_legacy_fails(self, session):
+        """New module is discovered when the classic endpoints are unavailable."""
+        import re
+
+        body = (
+            '[{"day":"Tuesday","start_time":"09:00","end_time":"09:45",'
+            '"subject":"Physics","room":"B2"}]'
+        )
+        client = IServClient(session, self.BASE_URL, "user", "pass")
+
+        with aioresponses() as mocked:
+            mocked.get(re.compile(r".*current-timetable/.*"), status=404)
+            mocked.get(re.compile(r".*plan/show/raw.*"), status=404)
+            mocked.get(
+                re.compile(r".*time-table/data.*"), status=200, body=body
+            )
+            mocked.get(re.compile(r".*timetable/data.*"), status=404)
+
+            result = await client.fetch_timetable(week=42)
+
+            assert "Physics" in result
+            assert client._timetable_path == client.TIME_TABLE_DATA_PATH
+
+    @pytest.mark.asyncio
+    async def test_child_and_childid_params_sent(self, session):
+        """Parent accounts send child in the filter and a childId query param."""
+        import json
+        import re
+        from yarl import URL
+
+        client = IServClient(
+            session, self.BASE_URL, "user", "pass", child_id="child-123"
+        )
+        client._timetable_path = client.TIME_TABLE_DATA_PATH
+
+        with aioresponses() as mocked:
+            mocked.get(re.compile(r".*time-table/data.*"), status=200, body="[]")
+
+            await client.fetch_timetable(week=42)
+
+        new_module_urls = [
+            url
+            for (method, url) in mocked.requests
+            if "/iserv/time-table/data" in str(url)
+        ]
+        assert new_module_urls, "expected a request to the time-table module"
+        url = URL(new_module_urls[0])
+        assert url.query.get("childId") == "child-123"
+        filter_payload = json.loads(url.query["filter"])
+        assert filter_payload["child"] == "child-123"
+        assert filter_payload["classes"] == []
+        assert filter_payload["teachers"] == []
+        assert filter_payload["rooms"] == []
+
+    @pytest.mark.asyncio
+    async def test_no_child_params_without_child_id(self, session):
+        """Without child_id, no child/childId parameters are sent."""
+        import json
+        import re
+        from yarl import URL
+
+        client = IServClient(session, self.BASE_URL, "user", "pass")
+        client._timetable_path = client.TIME_TABLE_DATA_PATH
+
+        with aioresponses() as mocked:
+            mocked.get(re.compile(r".*time-table/data.*"), status=200, body="[]")
+
+            await client.fetch_timetable(week=42)
+
+        new_module_urls = [
+            url
+            for (method, url) in mocked.requests
+            if "/iserv/time-table/data" in str(url)
+        ]
+        url = URL(new_module_urls[0])
+        assert "childId" not in url.query
+        filter_payload = json.loads(url.query["filter"])
+        assert "child" not in filter_payload
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_old_data_when_new_unavailable(self, session):
+        """Classic data endpoint is used when the new module is unavailable."""
+        import re
+
+        body = (
+            '[{"day":"Wednesday","start_time":"10:00",')
+        body += '"end_time":"10:45","subject":"English","room":"C3"}]'
+        client = IServClient(session, self.BASE_URL, "user", "pass")
+
+        with aioresponses() as mocked:
+            mocked.get(re.compile(r".*current-timetable/.*"), status=403)
+            mocked.get(re.compile(r".*plan/show/raw.*"), status=403)
+            mocked.get(re.compile(r".*time-table/data.*"), status=404)
+            mocked.get(
+                re.compile(r".*timetable/data.*"), status=200, body=body
+            )
+
+            result = await client.fetch_timetable(week=42)
+
+            assert "English" in result
+            assert client._timetable_path == client.TIMETABLE_DATA_PATH
+
+    @pytest.mark.asyncio
+    async def test_all_data_endpoints_unavailable_raises_cannot_connect(
+        self, session
+    ):
+        """CannotConnect (not AuthenticationError) when no data endpoint works."""
+        import re
+
+        client = IServClient(session, self.BASE_URL, "user", "pass")
+
+        with aioresponses() as mocked:
+            mocked.get(re.compile(r".*current-timetable/.*"), status=404)
+            mocked.get(re.compile(r".*plan/show/raw.*"), status=404)
+            mocked.get(re.compile(r".*time-table/data.*"), status=404)
+            mocked.get(re.compile(r".*timetable/data.*"), status=404)
+
+            with pytest.raises(CannotConnect):
+                await client.fetch_timetable(week=42)
