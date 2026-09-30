@@ -1,0 +1,21 @@
+[Unit]
+Description=HAiServ MCP server (Streamable HTTP)
+Documentation=file://${WORKDIR}/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${SERVICE_USER}
+WorkingDirectory=${WORKDIR}
+# Holds ISERV_URL, ISERV_USERNAME, ISERV_PASSWORD and optional ISERV_CHILD_ID
+# (mode 0600, root-owned).
+EnvironmentFile=${ENV_FILE}
+ExecStart=${PYTHON} ${WORKDIR}/mcp_server.py --transport streamable-http --host ${HOST} --port ${PORT}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
