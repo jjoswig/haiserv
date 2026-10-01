@@ -26,6 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """
     from homeassistant.helpers.aiohttp_client import async_get_clientsession
     from homeassistant.helpers.update_coordinator import UpdateFailed
+    from homeassistant.exceptions import ConfigEntryNotReady
 
     from .api import IServClient
     from .const import DOMAIN
@@ -51,7 +52,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     next_week_coordinator = IServCoordinator(hass, client, week_offset=1)
     try:
         await next_week_coordinator.async_config_entry_first_refresh()
-    except UpdateFailed:
+    except (UpdateFailed, ConfigEntryNotReady):
         next_week_coordinator.data = []
 
     # Store the coordinators for platform entities
@@ -63,7 +64,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     parentletter_coordinator = IServParentLetterCoordinator(hass, client)
     try:
         await parentletter_coordinator.async_config_entry_first_refresh()
-    except UpdateFailed:
+    except (UpdateFailed, ConfigEntryNotReady):
         parentletter_coordinator.data = []
     hass.data[DOMAIN][f"{entry.entry_id}_parentletter"] = parentletter_coordinator
 
