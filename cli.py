@@ -147,7 +147,9 @@ async def _fetch_week(
     from custom_components.haiserv.parser import parse_timetable, sort_lessons
 
     target_week = (datetime.now() + timedelta(weeks=week_offset)).isocalendar()[1]
-    raw_data = await client.fetch_timetable(week=target_week)
+    raw_data = await client.fetch_timetable(
+        week=target_week, cache_slot="current" if week_offset == 0 else "next"
+    )
     lessons = sort_lessons(parse_timetable(raw_data, locale="en"))
     return target_week, raw_data, lessons
 

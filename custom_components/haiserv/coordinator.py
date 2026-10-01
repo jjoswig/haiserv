@@ -61,12 +61,16 @@ class IServCoordinator(DataUpdateCoordinator[list[Lesson]]):
         target_week = target_date.isocalendar()[1]
 
         try:
-            raw_data = await self.client.fetch_timetable(week=target_week)
+            raw_data = await self.client.fetch_timetable(
+                week=target_week, cache_slot=f"offset{self.week_offset}"
+            )
         except AuthenticationError:
             # Session expired — try re-authenticating once and retry
             try:
                 await self.client.authenticate()
-                raw_data = await self.client.fetch_timetable(week=target_week)
+                raw_data = await self.client.fetch_timetable(
+                    week=target_week, cache_slot=f"offset{self.week_offset}"
+                )
             except (AuthenticationError, CannotConnect) as err:
                 self.consecutive_failures += 1
                 _LOGGER.error(
