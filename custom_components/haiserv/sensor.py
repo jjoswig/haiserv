@@ -105,6 +105,7 @@ class IServTimetableSensor(CoordinatorEntity[IServCoordinator], SensorEntity):
             "lessons": [asdict(lesson) for lesson in lessons],
             "timetable_data": getattr(self.coordinator, "timetable_data", None),
             "timetable_table": format_markdown_table(lessons),
+            "cached": getattr(self.coordinator, "timetable_from_cache", False),
             "last_updated": datetime.now().isoformat(),
         }
 

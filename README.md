@@ -27,6 +27,18 @@ If you find my work useful or it saves you some time, I'd genuinely appreciate a
 - Structured lesson data and a Markdown timetable in sensor attributes
 - Elternbrief (parent letter) inbox monitoring with unread count
 - Retention of previously fetched data during temporary connection failures
+- Local timetable cache: if a fetch fails (e.g. the school disabled the timetable with HTTP 403), the last successfully fetched timetable is served
+
+### Timetable cache
+
+Every successfully fetched timetable is written to a local JSON cache and reused
+when a later fetch fails — for example when a school temporarily disables the
+timetable for parents and students (HTTP 403) or the server is unreachable. The
+timetable sensor then keeps showing the last known timetable and reports
+`cached: true` as a state attribute.
+
+- Home Assistant: `<config>/haiserv_cache/`
+- CLI / MCP server: `$ISERV_CACHE_DIR`, defaulting to `~/.cache/haiserv`
 
 ## Requirements
 
