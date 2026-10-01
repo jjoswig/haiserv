@@ -183,6 +183,77 @@ Only use this tool on a trusted machine and never paste passwords or raw
 responses containing private school data into public issue reports. Verbose
 output deliberately omits passwords, query-string values, and response bodies.
 
+#### Run as a systemd daemon (Linux)
+
+Install the MCP server as a systemd service so it starts on boot and restarts
+after failures. The unit runs the MCP server (`mcp_server.py`) directly as your
+user and reads the iServ credentials from an environment file
+(`/etc/haiserv/mcp.env`, mode `0600`).
+
+Review the generated unit first (changes nothing on the system):
+
+```bash
+.venv/bin/python mcp_server.py --print-systemd-unit --url https://school.iserv.de
+```
+
+Install it — writes `/etc/systemd/system/haiserv-mcp.service` and
+`/etc/haiserv/mcp.env`, reloads systemd and starts the service:
+
+```bash
+sudo .venv/bin/python mcp_server.py --install-systemd-unit \
+  --url https://school.iserv.de --username student
+```
+
+The password is read from `ISERV_PASSWORD` if set (recommended — keeps it out of
+shell history and the unit file); otherwise pass `--password` or edit the
+environment file afterwards. For parent accounts add `--child-id <uuid>`.
+
+Options: `--unit-dir`, `--env-file`, `--service-user`, `--host`, `--port`.
+On a re-install, credentials already in the environment file are preserved and
+the previous unit is backed up as `*.service.bak`. If `ISERV_URL`,
+`ISERV_USERNAME` or `ISERV_PASSWORD` are still missing, the unit is written
+anyway and the service reports the error at startup.
+
+**Manage**
+
+```bash
+systemctl status haiserv-mcp
+systemctl restart haiserv-mcp
+systemctl stop haiserv-mcp
+systemctl disable --now haiserv-mcp
+journalctl -u haiserv-mcp -f      # live logs
+```
+
+**Change the credentials**
+
+```bash
+sudoedit /etc/haiserv/mcp.env     # ISERV_PASSWORD=…
+sudo systemctl restart haiserv-mcp
+```
+
+**Uninstall**
+
+```bash
+sudo systemctl disable --now haiserv-mcp
+sudo rm /etc/systemd/system/haiserv-mcp.service /etc/haiserv/mcp.env
+sudo systemctl daemon-reload
+```
+
+Notes:
+
+- The service runs as the **owner of the checkout** by default. If the checkout
+  sits in a directory the service user cannot enter (e.g. another user's home
+  with mode `0700`), systemd fails with `status=200/CHDIR`; install with
+  `--service-user <owner>` or move the checkout somewhere readable. The
+  installer warns about this before writing the unit.
+- The service binds `127.0.0.1` only and the HTTP transport does not require a
+  bearer token yet, so it is not reachable from other hosts. Keep it on a
+  trusted host or put a local proxy in front of it.
+- For a non-standard location pass `--unit-dir` / `--env-file`; the installer
+  then skips the `systemctl` calls and prints the commands to run instead.
+- `--print-systemd-unit` and `--install-systemd-unit` also work when the
+  credentials are not set yet; the service reports the error at startup.
+
 ## Installation
 
 ### Manual installation
