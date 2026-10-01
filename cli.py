@@ -333,6 +333,7 @@ async def async_main(args: argparse.Namespace) -> int:
         IServClient,
         validate_url,
     )
+    from custom_components.haiserv.cache import ResponseCache, default_cache_dir
     if not validate_url(args.url):
         print(
             "Error: --url must be an HTTPS URL with a valid hostname.",
@@ -351,6 +352,7 @@ async def async_main(args: argparse.Namespace) -> int:
             args.username,
             password,
             debug_callback=_debug if verbose else None,
+            cache=ResponseCache(default_cache_dir()),
         )
         try:
             await client.authenticate()

@@ -43,6 +43,7 @@ class IServCoordinator(DataUpdateCoordinator[list[Lesson]]):
         self.week_offset = week_offset
         self.consecutive_failures: int = 0
         self.timetable_data: object | None = None
+        self.timetable_from_cache: bool = False
 
     async def _async_update_data(self) -> list[Lesson]:
         """Fetch and parse timetable. Handle auth expiry and retries.
@@ -103,6 +104,7 @@ class IServCoordinator(DataUpdateCoordinator[list[Lesson]]):
         # Success — reset consecutive failure counter
         self.consecutive_failures = 0
         self.timetable_data = timetable_data
+        self.timetable_from_cache = bool(getattr(raw_data, "from_cache", False))
 
         return sorted_lessons
 

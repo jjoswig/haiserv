@@ -29,6 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.exceptions import ConfigEntryNotReady
 
     from .api import IServClient
+    from .cache import ResponseCache
     from .const import DOMAIN
     from .coordinator import IServCoordinator, IServParentLetterCoordinator
 
@@ -40,8 +41,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create aiohttp session via Home Assistant's session manager
     session = async_get_clientsession(hass)
 
-    # Instantiate the iServ API client
-    client = IServClient(session, url, username, password)
+    # Instantiate the iServ API client with a local timetable cache so a
+    # temporarily disabled module (e.g. HTTP 403) can serve the last result.
+    cache = ResponseCache(hass.config.path("haiserv_cache"))
+    client = IServClient(session, url, username, password, cache=cache)
 
     # Create and refresh the current-week coordinator
     coordinator = IServCoordinator(hass, client)

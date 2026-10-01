@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import logging
 import re
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
@@ -13,7 +14,10 @@ from urllib.parse import urljoin, urlparse, urlunparse
 
 import aiohttp
 
+from .cache import ResponseCache
 from .const import CONNECTION_TIMEOUT, REQUEST_TIMEOUT
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class AuthenticationError(Exception):
@@ -33,9 +37,13 @@ class TimetableResult(str):
 
     raw_response: str
     timetable_data: object | None
+    from_cache: bool
 
     def __new__(
-        cls, normalized_response: str, raw_response: str | None = None
+        cls,
+        normalized_response: str,
+        raw_response: str | None = None,
+        from_cache: bool = False,
     ) -> TimetableResult:
         result = super().__new__(cls, normalized_response)
         result.raw_response = (
@@ -45,6 +53,7 @@ class TimetableResult(str):
             result.timetable_data = json.loads(result.raw_response)
         except (json.JSONDecodeError, TypeError):
             result.timetable_data = None
+        result.from_cache = from_cache
         return result
 
 
@@ -98,6 +107,7 @@ class IServClient:
         username: str,
         password: str,
         debug_callback: Callable[[str], None] | None = None,
+        cache: ResponseCache | None = None,
     ) -> None:
         """Initialize the iServ client.
 
@@ -106,12 +116,16 @@ class IServClient:
             base_url: The base URL of the iServ server (e.g., "https://school.iserv.de").
             username: The iServ username.
             password: The iServ password.
+            debug_callback: Optional callback for safe request diagnostics.
+            cache: Optional on-disk cache used to serve the last successful
+                timetable when a fetch fails.
         """
         self._session = session
         self._base_url = _normalize_base_url(base_url)
         self._username = username
         self._password = password
         self._debug_callback = debug_callback
+        self._cache = cache
         self._authenticated = False
         self._timetable_path: str | None = None
         self._course_ids: tuple[str, ...] = ()
@@ -258,12 +272,55 @@ class IServClient:
             AuthenticationError: If re-authentication fails after session expiry.
             CannotConnect: If the connection times out or is refused.
         """
+        cache_key = self._cache_key("timetable", week)
         try:
-            return await self._fetch_timetable_once(week)
-        except AuthenticationError:
-            # Session expired — re-authenticate once and retry
-            await self.authenticate()
-            return await self._fetch_timetable_once(week)
+            try:
+                result = await self._fetch_timetable_once(week)
+            except AuthenticationError:
+                # Session expired — re-authenticate once and retry
+                await self.authenticate()
+                result = await self._fetch_timetable_once(week)
+        except (AuthenticationError, CannotConnect) as err:
+            # The school may have disabled the module (HTTP 403) or the server
+            # is unreachable; fall back to the last successful timetable.
+            cached = self._load_cached_timetable(cache_key)
+            if cached is None:
+                raise
+            _LOGGER.warning(
+                "Timetable fetch failed (%s); serving cached timetable (week=%s)",
+                err,
+                week,
+            )
+            return cached
+
+        self._store_cached_timetable(cache_key, result)
+        return result
+
+    def _cache_key(self, kind: str, week: int | None) -> str:
+        """Build a stable cache key for this account and request."""
+        week_part = "current" if week is None else str(week)
+        return f"{self._base_url}|{self._username}|{kind}|{week_part}"
+
+    def _store_cached_timetable(
+        self, key: str, result: TimetableResult
+    ) -> None:
+        """Persist a successful timetable for later fallback."""
+        if self._cache is None:
+            return
+        self._cache.store(
+            key, {"normalized": str(result), "raw": result.raw_response}
+        )
+
+    def _load_cached_timetable(self, key: str) -> TimetableResult | None:
+        """Return the cached timetable for ``key``, marked as cached."""
+        if self._cache is None:
+            return None
+        data = self._cache.load(key)
+        if not isinstance(data, dict) or "normalized" not in data:
+            return None
+        return TimetableResult(
+            data["normalized"], data.get("raw"), from_cache=True
+        )
 
     async def _fetch_timetable_once(self, week: int | None) -> TimetableResult:
         """Fetch from the detected timetable API generation."""

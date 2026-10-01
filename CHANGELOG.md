@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Local timetable cache: a failed fetch (for example HTTP 403 after a school
+  disabled the timetable for parents and students) now falls back to the last
+  successfully fetched timetable instead of failing. The timetable sensor
+  exposes the fallback via the `cached` state attribute.
+
 ## [0.1.0] — 2026-09-18
 
 ### Initial release

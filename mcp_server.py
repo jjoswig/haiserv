@@ -146,6 +146,7 @@ async def _get_client():
 
     import aiohttp
     from custom_components.haiserv.api import AuthenticationError, CannotConnect, IServClient
+    from custom_components.haiserv.cache import ResponseCache, default_cache_dir
 
     if _client is not None and _client.is_authenticated:
         return _client
@@ -156,7 +157,13 @@ async def _get_client():
 
     url, username, password = _get_credentials()
     _session = aiohttp.ClientSession()
-    _client = IServClient(_session, url, username, password)
+    _client = IServClient(
+        _session,
+        url,
+        username,
+        password,
+        cache=ResponseCache(default_cache_dir()),
+    )
     try:
         await _client.authenticate()
     except (AuthenticationError, CannotConnect):
