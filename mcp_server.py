@@ -202,7 +202,7 @@ async def get_full_schedule(week: str = "current") -> str:
     target_iso_week = (datetime.now() + timedelta(weeks=week_offset)).isocalendar()[1]
 
     client = await _get_client()
-    raw = await client.fetch_timetable(week=target_iso_week)
+    raw = await client.fetch_timetable(week=target_iso_week, cache_slot=week)
     lessons = sort_lessons(parse_timetable(str(raw), locale="en"))
 
     if not lessons:
@@ -247,7 +247,7 @@ async def get_schedule_for_day(day: str, week: str = "current") -> str:
     target_iso_week = (datetime.now() + timedelta(weeks=week_offset)).isocalendar()[1]
 
     client = await _get_client()
-    raw = await client.fetch_timetable(week=target_iso_week)
+    raw = await client.fetch_timetable(week=target_iso_week, cache_slot=week)
     all_lessons = sort_lessons(parse_timetable(str(raw), locale="en"))
 
     day_lessons = [lesson for lesson in all_lessons if lesson.day == normalised_day]

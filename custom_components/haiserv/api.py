@@ -256,7 +256,9 @@ class IServClient:
                 f"Connection error with {self._base_url}: {err}"
             ) from err
 
-    async def fetch_timetable(self, week: int | None = None) -> TimetableResult:
+    async def fetch_timetable(
+        self, week: int | None = None, cache_slot: str | None = None
+    ) -> TimetableResult:
         """Fetch raw timetable data for a given calendar week.
 
         If the session has expired (HTTP 401/403 on fetch), re-authenticates
@@ -272,7 +274,10 @@ class IServClient:
             AuthenticationError: If re-authentication fails after session expiry.
             CannotConnect: If the connection times out or is refused.
         """
-        cache_key = self._cache_key("timetable", week)
+        cache_key = self._cache_key(
+            "timetable",
+            cache_slot if cache_slot is not None else (week if week is not None else "current"),
+        )
         try:
             try:
                 result = await self._fetch_timetable_once(week)
@@ -296,10 +301,13 @@ class IServClient:
         self._store_cached_timetable(cache_key, result)
         return result
 
-    def _cache_key(self, kind: str, week: int | None) -> str:
-        """Build a stable cache key for this account and request."""
-        week_part = "current" if week is None else str(week)
-        return f"{self._base_url}|{self._username}|{kind}|{week_part}"
+    def _cache_key(self, kind: str, slot: object) -> str:
+        """Build a stable cache key for this account and slot.
+
+        The slot identifies the timetable (e.g. current vs next week) so each
+        cached timetable keeps only its latest successful version.
+        """
+        return f"{self._base_url}|{self._username}|{kind}|{slot}"
 
     def _store_cached_timetable(
         self, key: str, result: TimetableResult

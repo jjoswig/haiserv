@@ -33,7 +33,9 @@ If you find my work useful or it saves you some time, I'd genuinely appreciate a
 
 Every successfully fetched timetable is written to a local JSON cache and reused
 when a later fetch fails — for example when a school temporarily disables the
-timetable for parents and students (HTTP 403) or the server is unreachable. The
+timetable for parents and students (HTTP 403) or the server is unreachable. Only
+the latest successful version is kept per timetable (current and next week
+separately), so the cache never grows and always holds the most recent data. The
 timetable sensor then keeps showing the last known timetable and reports
 `cached: true` as a state attribute.
 
