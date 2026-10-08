@@ -311,8 +311,10 @@ async def _cmd_mcp(
             f"on http://{host}:{port}/mcp",
             file=sys.stderr,
         )
-        # run_streamable_http_async is the awaitable counterpart of run().
-        await server.run_streamable_http_async(host=host, port=port)
+        # FastMCP reads host/port from its settings; the async runner takes none.
+        server.settings.host = host
+        server.settings.port = port
+        await server.run_streamable_http_async()
     else:
         # stdio — do not write anything to stdout; the MCP wire uses it.
         print("Starting HAiServ MCP server (stdio) …", file=sys.stderr)
