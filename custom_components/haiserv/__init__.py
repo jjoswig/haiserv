@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -9,6 +10,8 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 PLATFORMS = ["sensor"]
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -46,9 +49,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     cache = ResponseCache(hass.config.path("haiserv_cache"))
     client = IServClient(session, url, username, password, cache=cache)
 
-    # Create and refresh the current-week coordinator
+    # Create and refresh the current-week coordinator. Some iServ instances have
+    # no timetable module at all; keep the entry (and the Elternbrief sensor)
+    # usable instead of failing the whole setup.
     coordinator = IServCoordinator(hass, client)
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except (UpdateFailed, ConfigEntryNotReady) as err:
+        _LOGGER.warning("Timetable not available, continuing without it: %s", err)
+        coordinator.data = []
 
     # Fetch the following week for a separate overview entity. Keep the
     # current-week entity usable if this optional request is unavailable.
