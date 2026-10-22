@@ -268,6 +268,28 @@ Notes:
 - `--print-systemd-unit` and `--install-systemd-unit` also work when the
   credentials are not set yet; the service reports the error at startup.
 
+### Use with master-mcp (one process for all integrations)
+
+The separate `master-mcp` host can load `haiserv_mcp.py` directly. It registers the
+same tools in the host process; no backend MCP server or subprocess is started.
+Add this entry to the host's `plugins` array (example for sibling checkouts):
+
+```json
+{
+  "module": "../haiserv/haiserv_mcp.py"
+}
+```
+
+Install this repository's MCP dependencies in the **host's venv**, not just this
+repository's venv. The master owns the transport and bearer token; the existing
+standalone CLI, tools, and service installer remain available for compatibility.
+After verifying the master and switching your MCP client to its single endpoint,
+disable the old `haiserv-mcp` service to realize the process savings.
+
+Credentials still use `ISERV_URL`, `ISERV_USERNAME`, and `ISERV_PASSWORD` in
+the host environment. Authentication is shared safely across concurrent tools;
+the HTTP session is closed when the host stops.
+
 ## Installation
 
 ### Manual installation
